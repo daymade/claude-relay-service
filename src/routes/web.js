@@ -32,28 +32,57 @@ router.post('/auth/login', async (req, res) => {
     // 从Redis获取管理员信息
     let adminData = await redis.getSession('admin_credentials');
     
-    // 如果Redis中没有管理员凭据，尝试从init.json重新加载
+    // 如果Redis中没有管理员凭据，尝试从环境变量或init.json重新加载
     if (!adminData || Object.keys(adminData).length === 0) {
-      const initFilePath = path.join(__dirname, '../../data/init.json');
+      let adminUsername, adminPassword;
+      let source = 'environment variables';
       
-      if (fs.existsSync(initFilePath)) {
+      // 优先从环境变量读取
+      if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+        adminUsername = process.env.ADMIN_USERNAME;
+        adminPassword = process.env.ADMIN_PASSWORD;
+      } else {
+        // 回退到 init.json
+        const initFilePath = path.join(__dirname, '../../data/init.json');
+        
+        if (fs.existsSync(initFilePath)) {
+          try {
+            const initData = JSON.parse(fs.readFileSync(initFilePath, 'utf8'));
+            adminUsername = initData.adminUsername;
+            adminPassword = initData.adminPassword;
+            source = 'init.json';
+          } catch (error) {
+            logger.error('❌ Failed to read init.json:', error);
+            return res.status(401).json({
+              error: 'Invalid credentials',
+              message: 'Invalid username or password'
+            });
+          }
+        } else {
+          return res.status(401).json({
+            error: 'Invalid credentials', 
+            message: 'No admin credentials configured'
+          });
+        }
+      }
+      
+      if (adminUsername && adminPassword) {
         try {
-          const initData = JSON.parse(fs.readFileSync(initFilePath, 'utf8'));
           const saltRounds = 10;
-          const passwordHash = await bcrypt.hash(initData.adminPassword, saltRounds);
+          const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
           
           adminData = {
-            username: initData.adminUsername,
+            username: adminUsername,
             passwordHash: passwordHash,
-            createdAt: initData.initializedAt || new Date().toISOString(),
+            createdAt: new Date().toISOString(),
             lastLogin: null,
-            updatedAt: initData.updatedAt || null
+            updatedAt: null
           };
           
           // 重新存储到Redis，不设置过期时间
           await redis.getClient().hset('session:admin_credentials', adminData);
           
-          logger.info('✅ Admin credentials reloaded from init.json');
+          logger.info(`✅ Admin credentials reloaded from ${source}`);
         } catch (error) {
           logger.error('❌ Failed to reload admin credentials:', error);
           return res.status(401).json({

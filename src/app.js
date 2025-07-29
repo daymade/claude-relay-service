@@ -292,35 +292,47 @@ class Application {
     }
   }
 
-  // 🔧 初始化管理员凭据（总是从 init.json 加载，确保数据一致性）
+  // 🔧 初始化管理员凭据（优先从环境变量，回退到 init.json）
   async initializeAdmin() {
     try {
-      const initFilePath = path.join(__dirname, '..', 'data', 'init.json');
+      let adminUsername, adminPassword;
+      let source = 'environment variables';
       
-      if (!fs.existsSync(initFilePath)) {
-        logger.warn('⚠️ No admin credentials found. Please run npm run setup first.');
-        return;
-      }
+      // 优先从环境变量读取
+      if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+        adminUsername = process.env.ADMIN_USERNAME;
+        adminPassword = process.env.ADMIN_PASSWORD;
+      } else {
+        // 回退到 init.json
+        const initFilePath = path.join(__dirname, '..', 'data', 'init.json');
+        
+        if (!fs.existsSync(initFilePath)) {
+          logger.warn('⚠️ No admin credentials found in environment variables or init.json. Please set ADMIN_USERNAME/ADMIN_PASSWORD or run npm run setup first.');
+          return;
+        }
 
-      // 从 init.json 读取管理员凭据（作为唯一真实数据源）
-      const initData = JSON.parse(fs.readFileSync(initFilePath, 'utf8'));
+        const initData = JSON.parse(fs.readFileSync(initFilePath, 'utf8'));
+        adminUsername = initData.adminUsername;
+        adminPassword = initData.adminPassword;
+        source = 'init.json';
+      }
       
       // 将明文密码哈希化
       const saltRounds = 10;
-      const passwordHash = await bcrypt.hash(initData.adminPassword, saltRounds);
+      const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
       
-      // 存储到Redis（每次启动都覆盖，确保与 init.json 同步）
+      // 存储到Redis
       const adminCredentials = {
-        username: initData.adminUsername,
+        username: adminUsername,
         passwordHash: passwordHash,
-        createdAt: initData.initializedAt || new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         lastLogin: null,
-        updatedAt: initData.updatedAt || null
+        updatedAt: null
       };
       
       await redis.setSession('admin_credentials', adminCredentials);
       
-      logger.success('✅ Admin credentials loaded from init.json (single source of truth)');
+      logger.success(`✅ Admin credentials loaded from ${source}`);
       logger.info(`📋 Admin username: ${adminCredentials.username}`);
       
     } catch (error) {

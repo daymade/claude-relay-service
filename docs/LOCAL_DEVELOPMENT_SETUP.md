@@ -172,8 +172,8 @@ PORT=3000
 npm run setup
 
 # The setup will output admin credentials like:
-# Username: cr_admin_1677783a
-# Password: btBHHRsmLryPAcNx
+# Username: cr_admin_xxxxxxxx
+# Password: your_generated_password
 # Save these credentials!
 ```
 
@@ -193,16 +193,27 @@ npm run setup
 
 ### Admin Credentials
 
-Admin credentials are stored in `/Users/tiansheng/Workspace/js/claude-relay-service/data/init.json`:
+Admin credentials can be configured in two ways:
 
+#### 1. Environment Variables (Recommended)
+Set credentials directly in your `.env` file:
+```bash
+ADMIN_USERNAME=your_admin_username
+ADMIN_PASSWORD=your_admin_password
+```
+
+#### 2. Legacy init.json (Fallback)
+If environment variables are not set, the system will fall back to reading from `data/init.json`:
 ```json
 {
   "initializedAt": "2025-07-29T13:58:42.286Z",
-  "adminUsername": "cr_admin_1677783a",
-  "adminPassword": "btBHHRsmLryPAcNx",
+  "adminUsername": "your_admin_username",
+  "adminPassword": "your_admin_password",
   "version": "1.0.0"
 }
 ```
+
+**Note**: Environment variables take priority over init.json for better security and easier deployment management.
 
 ## Development Commands
 
