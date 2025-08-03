@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "build:web": "cd web && npm run build",
-    "install:web": "cd web && npm install",
+    "build:web": "cd web/admin-spa && npm run build",
+    "install:web": "cd web/admin-spa && npm install",
     "setup": "node scripts/setup.js",
     "cli": "node cli/index.js",
     "init:costs": "node src/cli/initCosts.js",
@@ -37,7 +37,8 @@
     "data:export:enhanced": "node scripts/data-transfer-enhanced.js export",
     "data:export:encrypted": "node scripts/data-transfer-enhanced.js export --decrypt=false",
     "data:import:enhanced": "node scripts/data-transfer-enhanced.js import",
-    "data:debug": "node scripts/debug-redis-keys.js"
+    "data:debug": "node scripts/debug-redis-keys.js",
+    "test:pricing-fallback": "node scripts/test-pricing-fallback.js"
   },
   "dependencies": {
     "axios": "^1.6.0",

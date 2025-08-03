@@ -37,7 +37,9 @@ class ClaudeAccountService {
       claudeAiOauth = null, // Claude标准格式的OAuth数据
       proxy = null, // { type: 'socks5', host: 'localhost', port: 1080, username: '', password: '' }
       isActive = true,
-      accountType = 'shared' // 'dedicated' or 'shared'
+      accountType = 'shared', // 'dedicated' or 'shared'
+      priority = 50, // 调度优先级 (1-100，数字越小优先级越高)
+      schedulable = true // 是否可被调度
     } = options;
 
     const accountId = uuidv4();
@@ -60,11 +62,13 @@ class ClaudeAccountService {
         proxy: proxy ? JSON.stringify(proxy) : '',
         isActive: isActive.toString(),
         accountType: accountType, // 账号类型：'dedicated' 或 'shared'
+        priority: priority.toString(), // 调度优先级
         createdAt: new Date().toISOString(),
         lastUsedAt: '',
         lastRefreshAt: '',
         status: 'active', // 有OAuth数据的账户直接设为active
-        errorMessage: ''
+        errorMessage: '',
+        schedulable: schedulable.toString() // 是否可被调度
       };
     } else {
       // 兼容旧格式
@@ -81,11 +85,13 @@ class ClaudeAccountService {
         proxy: proxy ? JSON.stringify(proxy) : '',
         isActive: isActive.toString(),
         accountType: accountType, // 账号类型：'dedicated' 或 'shared'
+        priority: priority.toString(), // 调度优先级
         createdAt: new Date().toISOString(),
         lastUsedAt: '',
         lastRefreshAt: '',
         status: 'created', // created, active, expired, error
-        errorMessage: ''
+        errorMessage: '',
+        schedulable: schedulable.toString() // 是否可被调度
       };
     }
 
@@ -101,6 +107,7 @@ class ClaudeAccountService {
       isActive,
       proxy,
       accountType,
+      priority,
       status: accountData.status,
       createdAt: accountData.createdAt,
       expiresAt: accountData.expiresAt,
@@ -305,6 +312,7 @@ class ClaudeAccountService {
           status: account.status,
           errorMessage: account.errorMessage,
           accountType: account.accountType || 'shared', // 兼容旧数据，默认为共享
+          priority: parseInt(account.priority) || 50, // 兼容旧数据，默认优先级50
           createdAt: account.createdAt,
           lastUsedAt: account.lastUsedAt,
           lastRefreshAt: account.lastRefreshAt,
@@ -323,7 +331,9 @@ class ClaudeAccountService {
             progress: 0,
             remainingTime: null,
             lastRequestTime: null
-          }
+          },
+          // 添加调度状态
+          schedulable: account.schedulable !== 'false' // 默认为true，兼容历史数据
         };
       }));
       
@@ -343,7 +353,7 @@ class ClaudeAccountService {
         throw new Error('Account not found');
       }
 
-      const allowedUpdates = ['name', 'description', 'email', 'password', 'refreshToken', 'proxy', 'isActive', 'claudeAiOauth', 'accountType'];
+      const allowedUpdates = ['name', 'description', 'email', 'password', 'refreshToken', 'proxy', 'isActive', 'claudeAiOauth', 'accountType', 'priority', 'schedulable'];
       const updatedData = { ...accountData };
 
       // 检查是否新增了 refresh token
@@ -355,6 +365,8 @@ class ClaudeAccountService {
             updatedData[field] = this._encryptSensitiveData(value);
           } else if (field === 'proxy') {
             updatedData[field] = value ? JSON.stringify(value) : '';
+          } else if (field === 'priority') {
+            updatedData[field] = value.toString();
           } else if (field === 'claudeAiOauth') {
             // 更新 Claude AI OAuth 数据
             if (value) {
@@ -720,7 +732,7 @@ class ClaudeAccountService {
   }
 
   // 🚫 标记账号为限流状态
-  async markAccountRateLimited(accountId, sessionHash = null) {
+  async markAccountRateLimited(accountId, sessionHash = null, rateLimitResetTimestamp = null) {
     try {
       const accountData = await redis.getClaudeAccount(accountId);
       if (!accountData || Object.keys(accountData).length === 0) {
@@ -728,9 +740,45 @@ class ClaudeAccountService {
       }
 
       // 设置限流状态和时间
-      accountData.rateLimitedAt = new Date().toISOString();
-      accountData.rateLimitStatus = 'limited';
-      await redis.setClaudeAccount(accountId, accountData);
+      const updatedAccountData = { ...accountData };
+      updatedAccountData.rateLimitedAt = new Date().toISOString();
+      updatedAccountData.rateLimitStatus = 'limited';
+      
+      // 如果提供了准确的限流重置时间戳（来自API响应头）
+      if (rateLimitResetTimestamp) {
+        // 将Unix时间戳（秒）转换为毫秒并创建Date对象
+        const resetTime = new Date(rateLimitResetTimestamp * 1000);
+        updatedAccountData.rateLimitEndAt = resetTime.toISOString();
+        
+        // 计算当前会话窗口的开始时间（重置时间减去5小时）
+        const windowStartTime = new Date(resetTime.getTime() - (5 * 60 * 60 * 1000));
+        updatedAccountData.sessionWindowStart = windowStartTime.toISOString();
+        updatedAccountData.sessionWindowEnd = resetTime.toISOString();
+        
+        const now = new Date();
+        const minutesUntilEnd = Math.ceil((resetTime - now) / (1000 * 60));
+        logger.warn(`🚫 Account marked as rate limited with accurate reset time: ${accountData.name} (${accountId}) - ${minutesUntilEnd} minutes remaining until ${resetTime.toISOString()}`);
+      } else {
+        // 获取或创建会话窗口（预估方式）
+        const windowData = await this.updateSessionWindow(accountId, updatedAccountData);
+        Object.assign(updatedAccountData, windowData);
+        
+        // 限流结束时间 = 会话窗口结束时间
+        if (updatedAccountData.sessionWindowEnd) {
+          updatedAccountData.rateLimitEndAt = updatedAccountData.sessionWindowEnd;
+          const windowEnd = new Date(updatedAccountData.sessionWindowEnd);
+          const now = new Date();
+          const minutesUntilEnd = Math.ceil((windowEnd - now) / (1000 * 60));
+          logger.warn(`🚫 Account marked as rate limited until estimated session window ends: ${accountData.name} (${accountId}) - ${minutesUntilEnd} minutes remaining`);
+        } else {
+          // 如果没有会话窗口，使用默认1小时（兼容旧逻辑）
+          const oneHourLater = new Date(Date.now() + 60 * 60 * 1000);
+          updatedAccountData.rateLimitEndAt = oneHourLater.toISOString();
+          logger.warn(`🚫 Account marked as rate limited (1 hour default): ${accountData.name} (${accountId})`);
+        }
+      }
+      
+      await redis.setClaudeAccount(accountId, updatedAccountData);
 
       // 如果有会话哈希，删除粘性会话映射
       if (sessionHash) {
@@ -738,7 +786,6 @@ class ClaudeAccountService {
         logger.info(`🗑️ Deleted sticky session mapping for rate limited account: ${accountId}`);
       }
 
-      logger.warn(`🚫 Account marked as rate limited: ${accountData.name} (${accountId})`);
       return { success: true };
     } catch (error) {
       logger.error(`❌ Failed to mark account as rate limited: ${accountId}`, error);
@@ -757,6 +804,7 @@ class ClaudeAccountService {
       // 清除限流状态
       delete accountData.rateLimitedAt;
       delete accountData.rateLimitStatus;
+      delete accountData.rateLimitEndAt;  // 清除限流结束时间
       await redis.setClaudeAccount(accountId, accountData);
 
       logger.success(`✅ Rate limit removed for account: ${accountData.name} (${accountId})`);
@@ -777,17 +825,32 @@ class ClaudeAccountService {
 
       // 检查是否有限流状态
       if (accountData.rateLimitStatus === 'limited' && accountData.rateLimitedAt) {
-        const rateLimitedAt = new Date(accountData.rateLimitedAt);
         const now = new Date();
-        const hoursSinceRateLimit = (now - rateLimitedAt) / (1000 * 60 * 60);
+        
+        // 优先使用 rateLimitEndAt（基于会话窗口）
+        if (accountData.rateLimitEndAt) {
+          const rateLimitEndAt = new Date(accountData.rateLimitEndAt);
+          
+          // 如果当前时间超过限流结束时间，自动解除
+          if (now >= rateLimitEndAt) {
+            await this.removeAccountRateLimit(accountId);
+            return false;
+          }
+          
+          return true;
+        } else {
+          // 兼容旧数据：使用1小时限流
+          const rateLimitedAt = new Date(accountData.rateLimitedAt);
+          const hoursSinceRateLimit = (now - rateLimitedAt) / (1000 * 60 * 60);
 
-        // 如果限流超过1小时，自动解除
-        if (hoursSinceRateLimit >= 1) {
-          await this.removeAccountRateLimit(accountId);
-          return false;
+          // 如果限流超过1小时，自动解除
+          if (hoursSinceRateLimit >= 1) {
+            await this.removeAccountRateLimit(accountId);
+            return false;
+          }
+
+          return true;
         }
-
-        return true;
       }
 
       return false;
@@ -809,13 +872,29 @@ class ClaudeAccountService {
         const rateLimitedAt = new Date(accountData.rateLimitedAt);
         const now = new Date();
         const minutesSinceRateLimit = Math.floor((now - rateLimitedAt) / (1000 * 60));
-        const minutesRemaining = Math.max(0, 60 - minutesSinceRateLimit);
+        
+        let minutesRemaining;
+        let rateLimitEndAt;
+        
+        // 优先使用 rateLimitEndAt（基于会话窗口）
+        if (accountData.rateLimitEndAt) {
+          rateLimitEndAt = accountData.rateLimitEndAt;
+          const endTime = new Date(accountData.rateLimitEndAt);
+          minutesRemaining = Math.max(0, Math.ceil((endTime - now) / (1000 * 60)));
+        } else {
+          // 兼容旧数据：使用1小时限流
+          minutesRemaining = Math.max(0, 60 - minutesSinceRateLimit);
+          // 计算预期的结束时间
+          const endTime = new Date(rateLimitedAt.getTime() + 60 * 60 * 1000);
+          rateLimitEndAt = endTime.toISOString();
+        }
 
         return {
           isRateLimited: minutesRemaining > 0,
           rateLimitedAt: accountData.rateLimitedAt,
           minutesSinceRateLimit,
-          minutesRemaining
+          minutesRemaining,
+          rateLimitEndAt  // 新增：限流结束时间
         };
       }
 
@@ -823,7 +902,8 @@ class ClaudeAccountService {
         isRateLimited: false,
         rateLimitedAt: null,
         minutesSinceRateLimit: 0,
-        minutesRemaining: 0
+        minutesRemaining: 0,
+        rateLimitEndAt: null
       };
     } catch (error) {
       logger.error(`❌ Failed to get rate limit info for account: ${accountId}`, error);
@@ -849,14 +929,18 @@ class ClaudeAccountService {
       if (accountData.sessionWindowStart && accountData.sessionWindowEnd) {
         const windowEnd = new Date(accountData.sessionWindowEnd).getTime();
         
-        // 如果当前时间在窗口内，不需要更新
+        // 如果当前时间在窗口内，只更新最后请求时间
         if (currentTime < windowEnd) {
           accountData.lastRequestTime = now.toISOString();
           return accountData;
         }
+        
+        // 窗口已过期，记录日志
+        const windowStart = new Date(accountData.sessionWindowStart);
+        logger.info(`⏰ Session window expired for account ${accountData.name} (${accountId}): ${windowStart.toISOString()} - ${new Date(windowEnd).toISOString()}`);
       }
 
-      // 计算新的会话窗口
+      // 基于当前时间计算新的会话窗口
       const windowStart = this._calculateSessionWindowStart(now);
       const windowEnd = this._calculateSessionWindowEnd(windowStart);
 
@@ -865,7 +949,7 @@ class ClaudeAccountService {
       accountData.sessionWindowEnd = windowEnd.toISOString();
       accountData.lastRequestTime = now.toISOString();
 
-      logger.info(`🕐 Updated session window for account ${accountData.name} (${accountId}): ${windowStart.toISOString()} - ${windowEnd.toISOString()}`);
+      logger.info(`🕐 Created new session window for account ${accountData.name} (${accountId}): ${windowStart.toISOString()} - ${windowEnd.toISOString()} (from current time)`);
 
       return accountData;
     } catch (error) {
@@ -876,11 +960,11 @@ class ClaudeAccountService {
 
   // 🕐 计算会话窗口开始时间
   _calculateSessionWindowStart(requestTime) {
-    const hour = requestTime.getHours();
-    const windowStartHour = Math.floor(hour / 5) * 5; // 向下取整到最近的5小时边界
-    
+    // 从当前时间开始创建窗口，只将分钟取整到整点
     const windowStart = new Date(requestTime);
-    windowStart.setHours(windowStartHour, 0, 0, 0);
+    windowStart.setMinutes(0);
+    windowStart.setSeconds(0);
+    windowStart.setMilliseconds(0);
     
     return windowStart;
   }
@@ -957,79 +1041,67 @@ class ClaudeAccountService {
       logger.info('🔄 Initializing session windows for all Claude accounts...');
       
       const accounts = await redis.getAllClaudeAccounts();
-      let initializedCount = 0;
-      let skippedCount = 0;
-      let expiredCount = 0;
+      let validWindowCount = 0;
+      let expiredWindowCount = 0;
+      let noWindowCount = 0;
+      const now = new Date();
       
       for (const account of accounts) {
-        // 如果已经有会话窗口信息且不强制重算，跳过
-        if (account.sessionWindowStart && account.sessionWindowEnd && !forceRecalculate) {
-          skippedCount++;
-          logger.debug(`⏭️ Skipped account ${account.name} (${account.id}) - already has session window`);
-          continue;
+        // 如果强制重算，清除现有窗口信息
+        if (forceRecalculate && (account.sessionWindowStart || account.sessionWindowEnd)) {
+          logger.info(`🔄 Force recalculating window for account ${account.name} (${account.id})`);
+          delete account.sessionWindowStart;
+          delete account.sessionWindowEnd;
+          delete account.lastRequestTime;
+          await redis.setClaudeAccount(account.id, account);
         }
         
-        // 如果有lastUsedAt，基于它恢复会话窗口
-        if (account.lastUsedAt) {
-          const lastUsedTime = new Date(account.lastUsedAt);
-          const now = new Date();
+        // 检查现有会话窗口
+        if (account.sessionWindowStart && account.sessionWindowEnd) {
+          const windowEnd = new Date(account.sessionWindowEnd);
+          const windowStart = new Date(account.sessionWindowStart);
+          const timeUntilExpires = Math.round((windowEnd.getTime() - now.getTime()) / (1000 * 60));
           
-          // 计算时间差（分钟）
-          const timeSinceLastUsed = Math.round((now.getTime() - lastUsedTime.getTime()) / (1000 * 60));
-          
-          // 计算lastUsedAt对应的会话窗口
-          const windowStart = this._calculateSessionWindowStart(lastUsedTime);
-          const windowEnd = this._calculateSessionWindowEnd(windowStart);
-          
-          // 计算窗口剩余时间（分钟）
-          const timeUntilWindowExpires = Math.round((windowEnd.getTime() - now.getTime()) / (1000 * 60));
-          
-          logger.info(`🔍 Analyzing account ${account.name} (${account.id}):`);
-          logger.info(`   Last used: ${lastUsedTime.toISOString()} (${timeSinceLastUsed} minutes ago)`);
-          logger.info(`   Calculated window: ${windowStart.toISOString()} - ${windowEnd.toISOString()}`);
-          logger.info(`   Window expires in: ${timeUntilWindowExpires > 0 ? timeUntilWindowExpires + ' minutes' : 'EXPIRED'}`);
-          
-          // 只有窗口未过期才恢复
           if (now.getTime() < windowEnd.getTime()) {
-            account.sessionWindowStart = windowStart.toISOString();
-            account.sessionWindowEnd = windowEnd.toISOString();
-            account.lastRequestTime = account.lastUsedAt;
-            
-            await redis.setClaudeAccount(account.id, account);
-            initializedCount++;
-            
-            logger.success(`✅ Initialized session window for account ${account.name} (${account.id})`);
+            // 窗口仍然有效，保留它
+            validWindowCount++;
+            logger.info(`✅ Account ${account.name} (${account.id}) has valid window: ${windowStart.toISOString()} - ${windowEnd.toISOString()} (${timeUntilExpires} minutes remaining)`);
           } else {
-            expiredCount++;
-            logger.warn(`⏰ Window expired for account ${account.name} (${account.id}) - will create new window on next request`);
+            // 窗口已过期，清除它
+            expiredWindowCount++;
+            logger.warn(`⏰ Account ${account.name} (${account.id}) window expired: ${windowStart.toISOString()} - ${windowEnd.toISOString()}`);
+            
+            // 清除过期的窗口信息
+            delete account.sessionWindowStart;
+            delete account.sessionWindowEnd;
+            delete account.lastRequestTime;
+            await redis.setClaudeAccount(account.id, account);
           }
         } else {
-          logger.info(`📭 No lastUsedAt data for account ${account.name} (${account.id}) - will create window on first request`);
+          noWindowCount++;
+          logger.info(`📭 Account ${account.name} (${account.id}) has no session window - will create on next request`);
         }
       }
       
-      logger.success(`✅ Session window initialization completed:`);
+      logger.success('✅ Session window initialization completed:');
       logger.success(`   📊 Total accounts: ${accounts.length}`);
-      logger.success(`   ✅ Initialized: ${initializedCount}`);
-      logger.success(`   ⏭️ Skipped (existing): ${skippedCount}`);  
-      logger.success(`   ⏰ Expired: ${expiredCount}`);
-      logger.success(`   📭 No usage data: ${accounts.length - initializedCount - skippedCount - expiredCount}`);
+      logger.success(`   ✅ Valid windows: ${validWindowCount}`);
+      logger.success(`   ⏰ Expired windows: ${expiredWindowCount}`);
+      logger.success(`   📭 No windows: ${noWindowCount}`);
       
       return {
         total: accounts.length,
-        initialized: initializedCount,
-        skipped: skippedCount,
-        expired: expiredCount,
-        noData: accounts.length - initializedCount - skippedCount - expiredCount
+        validWindows: validWindowCount,
+        expiredWindows: expiredWindowCount,
+        noWindows: noWindowCount
       };
     } catch (error) {
       logger.error('❌ Failed to initialize session windows:', error);
       return {
         total: 0,
-        initialized: 0,
-        skipped: 0,
-        expired: 0,
-        noData: 0,
+        validWindows: 0,
+        expiredWindows: 0,
+        noWindows: 0,
         error: error.message
       };
     }
