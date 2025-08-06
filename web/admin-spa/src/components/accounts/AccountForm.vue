@@ -50,6 +50,7 @@
                     v-model="form.platform" 
                     value="claude" 
                     class="mr-2"
+                    :checked="form.platform === 'claude'"
                   >
                   <span class="text-sm text-gray-700">Claude</span>
                 </label>
@@ -67,25 +68,40 @@
             
             <div v-if="!isEdit">
               <label class="block text-sm font-semibold text-gray-700 mb-3">添加方式</label>
-              <div class="flex gap-4">
-                <label class="flex items-center cursor-pointer">
-                  <input 
-                    type="radio" 
-                    v-model="form.addType" 
-                    value="oauth" 
-                    class="mr-2"
-                  >
-                  <span class="text-sm text-gray-700">OAuth 授权 (推荐)</span>
-                </label>
-                <label class="flex items-center cursor-pointer">
-                  <input 
-                    type="radio" 
-                    v-model="form.addType" 
-                    value="manual" 
-                    class="mr-2"
-                  >
-                  <span class="text-sm text-gray-700">手动输入 Access Token</span>
-                </label>
+              <div class="space-y-2">
+                <div class="flex gap-4">
+                  <label class="flex items-center cursor-pointer">
+                    <input 
+                      type="radio" 
+                      v-model="form.addType" 
+                      value="oauth" 
+                      class="mr-2"
+                      :disabled="form.platform !== 'claude'"
+                    >
+                    <span class="text-sm text-gray-700">OAuth 授权 (推荐)</span>
+                  </label>
+                  <label class="flex items-center cursor-pointer">
+                    <input 
+                      type="radio" 
+                      v-model="form.addType" 
+                      value="manual" 
+                      class="mr-2"
+                    >
+                    <span class="text-sm text-gray-700">手动输入 Access Token</span>
+                  </label>
+                  <label class="flex items-center cursor-pointer" v-show="isClaudePlatform">
+                    <input 
+                      type="radio" 
+                      v-model="form.addType" 
+                      value="third-party" 
+                      class="mr-2"
+                    >
+                    <span class="text-sm text-gray-700">第三方代理</span>
+                  </label>
+                </div>
+                <div class="text-xs text-gray-500 bg-gray-100 p-2 rounded">
+                  Debug: Platform = {{ form.platform }}, AddType = {{ form.addType }}, isClaudePlatform = {{ isClaudePlatform }}
+                </div>
               </div>
             </div>
             
@@ -223,6 +239,55 @@
               </div>
             </div>
             
+            <!-- 第三方代理设置 -->
+            <div v-if="form.addType === 'third-party'" class="space-y-4 bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <div class="flex items-start gap-3 mb-4">
+                <div class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                  <i class="fas fa-globe text-white text-sm"></i>
+                </div>
+                <div>
+                  <h5 class="font-semibold text-purple-900 mb-2">第三方代理设置</h5>
+                  <p class="text-sm text-purple-800 mb-2">
+                    支持所有与 Claude Code 兼容的第三方代理服务，例如智谱 AI、通义千问等。
+                  </p>
+                  <div class="bg-white/80 rounded-lg p-3 mt-2 mb-2 border border-purple-300">
+                    <p class="text-sm text-purple-900 font-medium mb-1">
+                      <i class="fas fa-lightbulb mr-1"></i>
+                      配置示例（智谱 AI）：
+                    </p>
+                    <p class="text-xs text-purple-800 font-mono">
+                      Base URL: https://open.bigmodel.cn/api/anthropic/v1/messages<br>
+                      API Key: 4ea05ea256804d459a1fec97c4cd3bdd.q8V9A59YvQxnnoDI
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">Base URL <span class="text-red-500">*</span></label>
+                <input 
+                  v-model="form.baseUrl" 
+                  type="url" 
+                  class="form-input w-full font-mono text-sm"
+                  placeholder="https://api.example.com/v1/messages"
+                  required
+                >
+                <p v-if="errors.baseUrl" class="text-red-500 text-xs mt-1">{{ errors.baseUrl }}</p>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">API Key <span class="text-red-500">*</span></label>
+                <input 
+                  v-model="form.apiKey" 
+                  type="password" 
+                  class="form-input w-full font-mono"
+                  placeholder="请输入第三方服务的 API Key..."
+                  required
+                >
+                <p v-if="errors.apiKey" class="text-red-500 text-xs mt-1">{{ errors.apiKey }}</p>
+              </div>
+            </div>
+            
             <!-- 代理设置 -->
             <ProxyConfig v-model="form.proxy" />
             
@@ -331,8 +396,8 @@
             </p>
           </div>
           
-          <!-- Token 更新 -->
-          <div class="bg-amber-50 p-4 rounded-lg border border-amber-200">
+          <!-- Token 更新 (非第三方账户) -->
+          <div v-if="account.addType !== 'third-party'" class="bg-amber-50 p-4 rounded-lg border border-amber-200">
             <div class="flex items-start gap-3 mb-4">
               <div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
                 <i class="fas fa-key text-white text-sm"></i>
@@ -363,6 +428,42 @@
                   class="form-input w-full resize-none font-mono text-xs"
                   placeholder="留空表示不更新..."
                 ></textarea>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 第三方账户更新 -->
+          <div v-if="account.addType === 'third-party'" class="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <div class="flex items-start gap-3 mb-4">
+              <div class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                <i class="fas fa-globe text-white text-sm"></i>
+              </div>
+              <div>
+                <h5 class="font-semibold text-purple-900 mb-2">更新第三方代理</h5>
+                <p class="text-sm text-purple-800 mb-2">可以更新 Base URL 和 API Key。为了安全起见，不会显示当前的值。</p>
+                <p class="text-xs text-purple-600">💡 留空表示不更新该字段。</p>
+              </div>
+            </div>
+            
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">新的 Base URL</label>
+                <input 
+                  v-model="form.baseUrl" 
+                  type="url" 
+                  class="form-input w-full font-mono text-sm"
+                  placeholder="留空表示不更新..."
+                >
+              </div>
+              
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">新的 API Key</label>
+                <input 
+                  v-model="form.apiKey" 
+                  type="password" 
+                  class="form-input w-full font-mono"
+                  placeholder="留空表示不更新..."
+                >
               </div>
             </div>
           </div>
@@ -406,7 +507,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { showToast } from '@/utils/toast'
 import { useAccountsStore } from '@/stores/accounts'
 import { useConfirm } from '@/composables/useConfirm'
@@ -459,25 +560,66 @@ const initProxyConfig = () => {
 // 表单数据
 const form = ref({
   platform: props.account?.platform || 'claude',
-  addType: 'oauth',
+  addType: props.account?.addType || 'oauth',
   name: props.account?.name || '',
   description: props.account?.description || '',
   accountType: props.account?.accountType || 'shared',
   projectId: props.account?.projectId || '',
   accessToken: '',
   refreshToken: '',
+  baseUrl: props.account?.baseUrl || '',
+  apiKey: props.account?.apiKey || '',
   proxy: initProxyConfig()
+})
+
+// Ensure platform is initialized for new accounts
+if (!props.account && !form.value.platform) {
+  form.value.platform = 'claude'
+}
+
+// Debug logging
+console.log('AccountForm initialized:', {
+  platform: form.value.platform,
+  addType: form.value.addType,
+  isEdit: isEdit.value,
+  account: props.account
+})
+
+// Ensure proper initialization on mount
+onMounted(() => {
+  console.log('AccountForm mounted, platform:', form.value.platform)
+  // Force reactivity update if needed
+  if (!isEdit.value && !form.value.platform) {
+    form.value.platform = 'claude'
+    console.log('Set default platform to claude')
+  }
 })
 
 // 表单验证错误
 const errors = ref({
   name: '',
-  accessToken: ''
+  accessToken: '',
+  baseUrl: '',
+  apiKey: ''
+})
+
+// 计算是否为Claude平台
+const isClaudePlatform = computed(() => {
+  return form.value.platform === 'claude'
 })
 
 // 计算是否可以进入下一步
 const canProceed = computed(() => {
   return form.value.name?.trim() && form.value.platform
+})
+
+// 监听平台变化，重置addType
+watch(() => form.value.platform, (newPlatform, oldPlatform) => {
+  console.log('Platform changed:', oldPlatform, '->', newPlatform)
+  if (newPlatform === 'gemini') {
+    // Gemini不支持OAuth，只能使用手动模式
+    form.value.addType = 'manual'
+  }
 })
 
 // 计算是否可以创建
@@ -527,6 +669,7 @@ const handleOAuthSuccess = async (tokenInfo) => {
       name: form.value.name,
       description: form.value.description,
       accountType: form.value.accountType,
+      addType: 'oauth',
       proxy: form.value.proxy.enabled ? {
         type: form.value.proxy.type,
         host: form.value.proxy.host,
@@ -567,6 +710,8 @@ const createAccount = async () => {
   // 清除之前的错误
   errors.value.name = ''
   errors.value.accessToken = ''
+  errors.value.baseUrl = ''
+  errors.value.apiKey = ''
   
   let hasError = false
   
@@ -580,6 +725,29 @@ const createAccount = async () => {
     hasError = true
   }
   
+  if (form.value.addType === 'third-party') {
+    if (!form.value.baseUrl || form.value.baseUrl.trim() === '') {
+      errors.value.baseUrl = '请填写 Base URL'
+      hasError = true
+    } else {
+      try {
+        const url = new URL(form.value.baseUrl)
+        if (url.protocol !== 'https:') {
+          errors.value.baseUrl = 'Base URL 必须使用 HTTPS 协议'
+          hasError = true
+        }
+      } catch (e) {
+        errors.value.baseUrl = '请输入有效的 URL 格式'
+        hasError = true
+      }
+    }
+    
+    if (!form.value.apiKey || form.value.apiKey.trim() === '') {
+      errors.value.apiKey = '请填写 API Key'
+      hasError = true
+    }
+  }
+  
   if (hasError) {
     return
   }
@@ -590,6 +758,7 @@ const createAccount = async () => {
       name: form.value.name,
       description: form.value.description,
       accountType: form.value.accountType,
+      addType: form.value.addType,
       proxy: form.value.proxy.enabled ? {
         type: form.value.proxy.type,
         host: form.value.proxy.host,
@@ -599,7 +768,11 @@ const createAccount = async () => {
       } : null
     }
     
-    if (form.value.platform === 'claude') {
+    if (form.value.platform === 'claude' && form.value.addType === 'third-party') {
+      // 第三方代理模式
+      data.baseUrl = form.value.baseUrl
+      data.apiKey = form.value.apiKey
+    } else if (form.value.platform === 'claude') {
       // Claude手动模式需要构建claudeAiOauth对象
       const expiresInMs = form.value.refreshToken 
         ? (10 * 60 * 1000) // 10分钟
@@ -685,6 +858,16 @@ const updateAccount = async () => {
         username: form.value.proxy.username || null,
         password: form.value.proxy.password || null
       } : null
+    }
+    
+    // 更新第三方账户的信息
+    if (props.account.addType === 'third-party') {
+      if (form.value.baseUrl) {
+        data.baseUrl = form.value.baseUrl
+      }
+      if (form.value.apiKey) {
+        data.apiKey = form.value.apiKey
+      }
     }
     
     // 只有非空时才更新token
@@ -773,14 +956,21 @@ watch(() => props.account, (newAccount) => {
     
     form.value = {
       platform: newAccount.platform,
-      addType: 'oauth',
+      addType: newAccount.addType || 'oauth',
       name: newAccount.name,
       description: newAccount.description || '',
       accountType: newAccount.accountType || 'shared',
       projectId: newAccount.projectId || '',
       accessToken: '',
       refreshToken: '',
+      baseUrl: newAccount.baseUrl || '',
+      apiKey: '',
       proxy: proxyConfig
+    }
+  } else {
+    // 确保新建时平台默认为 claude
+    if (!form.value.platform) {
+      form.value.platform = 'claude'
     }
   }
 }, { immediate: true })

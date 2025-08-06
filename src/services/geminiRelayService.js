@@ -336,7 +336,7 @@ async function getAvailableModels(accessToken, proxy, projectId, location = 'us-
     headers: {
       'Authorization': `Bearer ${accessToken}`
     },
-    timeout: 30000
+    timeout: 600000 // 10分钟超时
   };
   
   const proxyAgent = createProxyAgent(proxy);

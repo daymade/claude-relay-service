@@ -155,7 +155,7 @@ async function exchangeCodeForTokens(authorizationCode, codeVerifier, state, pro
                 'Origin': 'https://claude.ai'
             },
             httpsAgent: agent,
-            timeout: 30000
+            timeout: 600000 // 10分钟超时
         });
 
         logger.success('✅ OAuth token exchange successful', {

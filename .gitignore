@@ -139,6 +139,7 @@ desktop.ini
 *.swp
 *.swo
 *~
+.cursorindexingignore
 
 # Backup files
 *.bak
@@ -187,6 +188,9 @@ grafana/
 test-results/
 coverage/
 .nyc_output/
+.specstory/
+docker-compose.test.yml
+scripts/test-*.sh
 
 # Documentation build
 docs/build/

@@ -393,8 +393,14 @@ class Application {
 
       const serverTimeout = 600000; // 默认10分钟
       this.server.timeout = serverTimeout;
-      this.server.keepAliveTimeout = serverTimeout + 5000; // keepAlive 稍长一点
-      logger.info(`⏱️  Server timeout set to ${serverTimeout}ms (${serverTimeout/1000}s)`);
+      this.server.headersTimeout = serverTimeout; // 关键：设置headers超时为10分钟
+      this.server.requestTimeout = 0; // 0 = 不限制请求超时
+      this.server.keepAliveTimeout = 70000; // 70秒，比 Cloudflare (67s) 稍大
+      logger.info(`⏱️  Server timeout configuration:`);
+      logger.info(`   - timeout: ${serverTimeout}ms (${serverTimeout/1000}s)`);
+      logger.info(`   - headersTimeout: ${serverTimeout}ms (${serverTimeout/1000}s)`);
+      logger.info(`   - requestTimeout: unlimited`);
+      logger.info(`   - keepAliveTimeout: 70000ms (70s)`);
       
 
       // 🔄 定期清理任务

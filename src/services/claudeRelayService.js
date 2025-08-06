@@ -96,7 +96,25 @@ class ClaudeRelayService {
       logger.info(`📤 Processing API request for key: ${apiKeyData.name || apiKeyData.id}, account: ${accountId}${sessionHash ? `, session: ${sessionHash}` : ''}`);
       
       // 获取有效的访问token
-      const accessToken = await claudeAccountService.getValidAccessToken(accountId);
+      const tokenInfo = await claudeAccountService.getValidAccessToken(accountId);
+      
+      // 检查是否是第三方账户
+      let accessToken, baseUrl, apiKey;
+      if (tokenInfo && typeof tokenInfo === 'object' && tokenInfo.isThirdParty) {
+        // 第三方账户，使用自定义的base URL和API key
+        accessToken = null;
+        // 第三方代理的baseUrl需要加上/v1/messages路径
+        baseUrl = tokenInfo.baseUrl.endsWith('/') 
+          ? tokenInfo.baseUrl + 'v1/messages'
+          : tokenInfo.baseUrl + '/v1/messages';
+        apiKey = tokenInfo.apiKey;
+        logger.info(`🌐 Using third-party proxy: ${baseUrl}`);
+      } else {
+        // 普通账户，使用OAuth token
+        accessToken = tokenInfo;
+        baseUrl = this.claudeApiUrl;
+        apiKey = null;
+      }
       
       // 处理请求体（传递 clientHeaders 以判断是否需要设置 Claude Code 系统提示词）
       const processedBody = this._processRequestBody(requestBody, clientHeaders);
@@ -128,7 +146,7 @@ class ClaudeRelayService {
         clientHeaders,
         accountId,
         (req) => { upstreamRequest = req; },
-        options
+        { ...options, baseUrl, apiKey }
       );
       
       // 移除监听器（请求成功完成）
@@ -430,7 +448,9 @@ class ClaudeRelayService {
 
   // 🔗 发送请求到Claude API
   async _makeClaudeRequest(body, accessToken, proxyAgent, clientHeaders, accountId, onRequest, requestOptions = {}) {
-    const url = new URL(this.claudeApiUrl);
+    // 使用自定义的baseUrl或默认的claudeApiUrl
+    const apiUrl = requestOptions.baseUrl || this.claudeApiUrl;
+    const url = new URL(apiUrl);
     
     // 获取过滤后的客户端 headers
     const filteredHeaders = this._filterClientHeaders(clientHeaders);
@@ -463,7 +483,7 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': requestOptions.apiKey ? `Bearer ${requestOptions.apiKey}` : `Bearer ${accessToken}`,
           'anthropic-version': this.apiVersion,
           ...finalHeaders
         },
@@ -612,7 +632,25 @@ class ClaudeRelayService {
       logger.info(`📡 Processing streaming API request with usage capture for key: ${apiKeyData.name || apiKeyData.id}, account: ${accountId}${sessionHash ? `, session: ${sessionHash}` : ''}`);
       
       // 获取有效的访问token
-      const accessToken = await claudeAccountService.getValidAccessToken(accountId);
+      const tokenInfo = await claudeAccountService.getValidAccessToken(accountId);
+      
+      // 检查是否是第三方账户
+      let accessToken, baseUrl, apiKey;
+      if (tokenInfo && typeof tokenInfo === 'object' && tokenInfo.isThirdParty) {
+        // 第三方账户，使用自定义的base URL和API key
+        accessToken = null;
+        // 第三方代理的baseUrl需要加上/v1/messages路径
+        baseUrl = tokenInfo.baseUrl.endsWith('/') 
+          ? tokenInfo.baseUrl + 'v1/messages'
+          : tokenInfo.baseUrl + '/v1/messages';
+        apiKey = tokenInfo.apiKey;
+        logger.info(`🌐 [Stream] Using third-party proxy: ${baseUrl}`);
+      } else {
+        // 普通账户，使用OAuth token
+        accessToken = tokenInfo;
+        baseUrl = this.claudeApiUrl;
+        apiKey = null;
+      }
       
       // 处理请求体（传递 clientHeaders 以判断是否需要设置 Claude Code 系统提示词）
       const processedBody = this._processRequestBody(requestBody, clientHeaders);
@@ -624,7 +662,7 @@ class ClaudeRelayService {
       return await this._makeClaudeStreamRequestWithUsageCapture(processedBody, accessToken, proxyAgent, clientHeaders, responseStream, (usageData) => {
         // 在usageCallback中添加accountId
         usageCallback({ ...usageData, accountId });
-      }, accountId, sessionHash, streamTransformer, options);
+      }, accountId, sessionHash, streamTransformer, { ...options, baseUrl, apiKey });
     } catch (error) {
       logger.error('❌ Claude stream relay with usage capture failed:', error);
       throw error;
@@ -656,7 +694,9 @@ class ClaudeRelayService {
     }
     
     return new Promise((resolve, reject) => {
-      const url = new URL(this.claudeApiUrl);
+      // 使用自定义的baseUrl或默认的claudeApiUrl
+      const apiUrl = requestOptions.baseUrl || this.claudeApiUrl;
+      const url = new URL(apiUrl);
       
       const options = {
         hostname: url.hostname,
@@ -665,7 +705,7 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': requestOptions.apiKey ? `Bearer ${requestOptions.apiKey}` : `Bearer ${accessToken}`,
           'anthropic-version': this.apiVersion,
           ...finalHeaders
         },
@@ -937,7 +977,9 @@ class ClaudeRelayService {
   // 🌊 发送流式请求到Claude API
   async _makeClaudeStreamRequest(body, accessToken, proxyAgent, clientHeaders, responseStream, requestOptions = {}) {
     return new Promise((resolve, reject) => {
-      const url = new URL(this.claudeApiUrl);
+      // 使用自定义的baseUrl或默认的claudeApiUrl
+      const apiUrl = requestOptions.baseUrl || this.claudeApiUrl;
+      const url = new URL(apiUrl);
       
       // 获取过滤后的客户端 headers
       const filteredHeaders = this._filterClientHeaders(clientHeaders);
@@ -949,7 +991,7 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': requestOptions.apiKey ? `Bearer ${requestOptions.apiKey}` : `Bearer ${accessToken}`,
           'anthropic-version': this.apiVersion,
           ...filteredHeaders
         },

@@ -37,14 +37,42 @@ class ClaudeAccountService {
       claudeAiOauth = null, // Claude标准格式的OAuth数据
       proxy = null, // { type: 'socks5', host: 'localhost', port: 1080, username: '', password: '' }
       isActive = true,
-      accountType = 'shared' // 'dedicated' or 'shared'
+      accountType = 'shared', // 'dedicated' or 'shared'
+      addType = 'oauth', // 'oauth', 'manual', or 'third-party'
+      baseUrl = '', // 第三方代理的基础URL
+      apiKey = '' // 第三方代理的API密钥
     } = options;
 
     const accountId = uuidv4();
     
     let accountData;
     
-    if (claudeAiOauth) {
+    if (addType === 'third-party') {
+      // 第三方代理账户
+      accountData = {
+        id: accountId,
+        name,
+        description,
+        email: '',
+        password: '',
+        claudeAiOauth: '',
+        accessToken: '',
+        refreshToken: '',
+        expiresAt: '',
+        scopes: '',
+        proxy: proxy ? JSON.stringify(proxy) : '',
+        isActive: isActive.toString(),
+        accountType: accountType, // 账号类型：'dedicated' 或 'shared'
+        createdAt: new Date().toISOString(),
+        lastUsedAt: '',
+        lastRefreshAt: '',
+        status: 'active', // 第三方账户直接设为active
+        errorMessage: '',
+        addType: addType,
+        baseUrl: baseUrl, // 存储第三方API基础URL
+        apiKey: this._encryptSensitiveData(apiKey) // 加密存储API密钥
+      };
+    } else if (claudeAiOauth) {
       // 使用Claude标准格式的OAuth数据
       accountData = {
         id: accountId,
@@ -64,7 +92,10 @@ class ClaudeAccountService {
         lastUsedAt: '',
         lastRefreshAt: '',
         status: 'active', // 有OAuth数据的账户直接设为active
-        errorMessage: ''
+        errorMessage: '',
+        addType: addType || 'oauth',
+        baseUrl: '',
+        apiKey: ''
       };
     } else {
       // 兼容旧格式
@@ -85,7 +116,10 @@ class ClaudeAccountService {
         lastUsedAt: '',
         lastRefreshAt: '',
         status: 'created', // created, active, expired, error
-        errorMessage: ''
+        errorMessage: '',
+        addType: addType || 'manual',
+        baseUrl: '',
+        apiKey: ''
       };
     }
 
@@ -104,7 +138,10 @@ class ClaudeAccountService {
       status: accountData.status,
       createdAt: accountData.createdAt,
       expiresAt: accountData.expiresAt,
-      scopes: claudeAiOauth ? claudeAiOauth.scopes : []
+      scopes: claudeAiOauth ? claudeAiOauth.scopes : [],
+      addType: addType,
+      baseUrl: baseUrl,
+      apiKey: apiKey ? '***' : '' // 返回时不暴露真实API密钥
     };
   }
 
@@ -117,6 +154,17 @@ class ClaudeAccountService {
       
       if (!accountData || Object.keys(accountData).length === 0) {
         throw new Error('Account not found');
+      }
+
+      // 第三方账户不需要刷新token
+      if (accountData.addType === 'third-party') {
+        logger.info(`🚫 Third-party account does not require token refresh: ${accountData.name} (${accountId})`);
+        return {
+          success: true,
+          accessToken: null,
+          expiresAt: null,
+          isThirdParty: true
+        };
       }
 
       const refreshToken = this._decryptSensitiveData(accountData.refreshToken);
@@ -171,7 +219,7 @@ class ClaudeAccountService {
           'Origin': 'https://claude.ai'
         },
         httpsAgent: agent,
-        timeout: 30000
+        timeout: 600000 // 10分钟超时
       });
 
       if (response.status === 200) {
@@ -237,6 +285,19 @@ class ClaudeAccountService {
 
       if (accountData.isActive !== 'true') {
         throw new Error('Account is disabled');
+      }
+
+      // 第三方账户返回特殊标记
+      if (accountData.addType === 'third-party') {
+        // 更新最后使用时间
+        accountData.lastUsedAt = new Date().toISOString();
+        await redis.setClaudeAccount(accountId, accountData);
+        
+        return {
+          isThirdParty: true,
+          apiKey: this._decryptSensitiveData(accountData.apiKey),
+          baseUrl: accountData.baseUrl
+        };
       }
 
       // 检查token是否过期
@@ -305,6 +366,9 @@ class ClaudeAccountService {
           status: account.status,
           errorMessage: account.errorMessage,
           accountType: account.accountType || 'shared', // 兼容旧数据，默认为共享
+          addType: account.addType || 'oauth', // 兼容旧数据
+          baseUrl: account.baseUrl || '',
+          apiKey: account.apiKey ? '***' : '', // 不暴露真实API密钥
           createdAt: account.createdAt,
           lastUsedAt: account.lastUsedAt,
           lastRefreshAt: account.lastRefreshAt,
@@ -343,7 +407,7 @@ class ClaudeAccountService {
         throw new Error('Account not found');
       }
 
-      const allowedUpdates = ['name', 'description', 'email', 'password', 'refreshToken', 'proxy', 'isActive', 'claudeAiOauth', 'accountType'];
+      const allowedUpdates = ['name', 'description', 'email', 'password', 'refreshToken', 'proxy', 'isActive', 'claudeAiOauth', 'accountType', 'baseUrl', 'apiKey', 'addType'];
       const updatedData = { ...accountData };
 
       // 检查是否新增了 refresh token
@@ -351,7 +415,7 @@ class ClaudeAccountService {
       
       for (const [field, value] of Object.entries(updates)) {
         if (allowedUpdates.includes(field)) {
-          if (['email', 'password', 'refreshToken'].includes(field)) {
+          if (['email', 'password', 'refreshToken', 'apiKey'].includes(field)) {
             updatedData[field] = this._encryptSensitiveData(value);
           } else if (field === 'proxy') {
             updatedData[field] = value ? JSON.stringify(value) : '';
@@ -1008,7 +1072,7 @@ class ClaudeAccountService {
         }
       }
       
-      logger.success(`✅ Session window initialization completed:`);
+      logger.success('✅ Session window initialization completed:');
       logger.success(`   📊 Total accounts: ${accounts.length}`);
       logger.success(`   ✅ Initialized: ${initializedCount}`);
       logger.success(`   ⏭️ Skipped (existing): ${skippedCount}`);  
