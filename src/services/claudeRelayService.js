@@ -322,6 +322,11 @@ class ClaudeRelayService {
       }
     }
 
+    // Claude API只允许temperature或top_p其中之一，优先使用temperature
+    if (processedBody.top_p !== undefined && processedBody.top_p !== null) {
+      delete processedBody.top_p;
+    }
+
     return processedBody;
   }
 
@@ -430,6 +435,8 @@ class ClaudeRelayService {
   _filterClientHeaders(clientHeaders) {
     // 需要移除的敏感 headers
     const sensitiveHeaders = [
+      'content-type',
+      'user-agent',
       'x-api-key',
       'authorization',
       'host',
@@ -572,6 +579,7 @@ class ClaudeRelayService {
       }
 
       req.on('error', (error) => {
+        console.error(': ❌ ', error);
         logger.error('❌ Claude API request error:', error.message, {
           code: error.code,
           errno: error.errno,
@@ -756,6 +764,7 @@ class ClaudeRelayService {
           });
           
           res.on('end', () => {
+            console.error(': ❌ ', errorData);
             logger.error('❌ Claude API error response:', errorData);
             if (!responseStream.destroyed) {
               // 发送错误事件
