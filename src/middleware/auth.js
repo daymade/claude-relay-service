@@ -11,6 +11,7 @@ const authenticateApiKey = async (req, res, next) => {
   try {
     // 安全提取API Key，支持多种格式
     const apiKey = req.headers['x-api-key'] || 
+                   req.headers['x-goog-api-key'] || 
                    req.headers['authorization']?.replace(/^Bearer\s+/i, '') ||
                    req.headers['api-key'];
     
@@ -56,21 +57,25 @@ const authenticateApiKey = async (req, res, next) => {
       let clientAllowed = false;
       let matchedClient = null;
       
+      // 获取预定义客户端列表，如果配置不存在则使用默认值
+      const predefinedClients = config.clientRestrictions?.predefinedClients || [];
+      const allowCustomClients = config.clientRestrictions?.allowCustomClients || false;
+      
       // 遍历允许的客户端列表
       for (const allowedClientId of validation.keyData.allowedClients) {
         // 在预定义客户端列表中查找
-        const predefinedClient = config.clientRestrictions.predefinedClients.find(
+        const predefinedClient = predefinedClients.find(
           client => client.id === allowedClientId
         );
         
         if (predefinedClient) {
           // 使用预定义的正则表达式匹配 User-Agent
-          if (predefinedClient.userAgentPattern.test(userAgent)) {
+          if (predefinedClient.userAgentPattern && predefinedClient.userAgentPattern.test(userAgent)) {
             clientAllowed = true;
             matchedClient = predefinedClient.name;
             break;
           }
-        } else if (config.clientRestrictions.allowCustomClients) {
+        } else if (allowCustomClients) {
           // 如果允许自定义客户端，这里可以添加自定义客户端的验证逻辑
           // 目前暂时跳过自定义客户端
           continue;
@@ -461,7 +466,7 @@ const requestLogger = (req, res, next) => {
   
   // 记录请求开始
   if (req.originalUrl !== '/health') { // 避免健康检查日志过多
-    logger.request(`▶️ [${requestId}] ${req.method} ${req.originalUrl} | IP: ${clientIP}`);
+    logger.info(`▶️ [${requestId}] ${req.method} ${req.originalUrl} | IP: ${clientIP}`);
   }
   
   res.on('finish', () => {
@@ -487,7 +492,7 @@ const requestLogger = (req, res, next) => {
     } else if (res.statusCode >= 400) {
       logger.warn(`◀️ [${requestId}] ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration}ms | ${contentLength}B`, logMetadata);
     } else if (req.originalUrl !== '/health') {
-      logger.request(`◀️ [${requestId}] ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration}ms | ${contentLength}B`, logMetadata);
+      logger.request( req.method, req.originalUrl, res.statusCode, duration, logMetadata);
     }
     
     // API Key相关日志

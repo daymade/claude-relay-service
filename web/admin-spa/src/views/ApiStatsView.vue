@@ -1,7 +1,7 @@
 <template>
-  <div class="min-h-screen gradient-bg p-6">
+  <div class="min-h-screen gradient-bg p-4 md:p-6">
     <!-- 顶部导航 -->
-    <div class="glass-strong rounded-3xl p-6 mb-8 shadow-xl">
+    <div class="glass-strong rounded-3xl p-4 md:p-6 mb-6 md:mb-8 shadow-xl">
       <div class="flex flex-col md:flex-row justify-between items-center gap-4">
         <LogoTitle 
           :loading="oemLoading"
@@ -10,82 +10,94 @@
           :logo-src="oemSettings.siteIconData || oemSettings.siteIcon"
         />
         <div class="flex items-center gap-3">
-          <router-link to="/dashboard" class="admin-button rounded-xl px-4 py-2 text-white transition-all duration-300 flex items-center gap-2">
-            <i class="fas fa-cog text-sm"></i>
-            <span class="text-sm font-medium">管理后台</span>
+          <router-link
+            to="/dashboard"
+            class="admin-button rounded-xl px-3 py-2 md:px-4 md:py-2 text-white transition-all duration-300 flex items-center gap-2"
+          >
+            <i class="fas fa-cog text-sm" />
+            <span class="text-xs md:text-sm font-medium">管理后台</span>
           </router-link>
         </div>
       </div>
     </div>
 
     <!-- Tab 切换 -->
-    <div class="mb-8">
+    <div class="mb-6 md:mb-8">
       <div class="flex justify-center">
-        <div class="inline-flex bg-white/10 backdrop-blur-xl rounded-full p-1 shadow-lg border border-white/20">
+        <div class="inline-flex bg-white/10 backdrop-blur-xl rounded-full p-1 shadow-lg border border-white/20 w-full max-w-md md:w-auto">
           <button
-            @click="currentTab = 'stats'"
             :class="[
               'tab-pill-button',
               currentTab === 'stats' ? 'active' : ''
             ]"
+            @click="currentTab = 'stats'"
           >
-            <i class="fas fa-chart-line mr-2"></i>
-            <span>统计查询</span>
+            <i class="fas fa-chart-line mr-1 md:mr-2" />
+            <span class="text-sm md:text-base">统计查询</span>
           </button>
           <button
-            @click="currentTab = 'tutorial'"
             :class="[
               'tab-pill-button',
               currentTab === 'tutorial' ? 'active' : ''
             ]"
+            @click="currentTab = 'tutorial'"
           >
-            <i class="fas fa-graduation-cap mr-2"></i>
-            <span>使用教程</span>
+            <i class="fas fa-graduation-cap mr-1 md:mr-2" />
+            <span class="text-sm md:text-base">使用教程</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- 统计内容 -->
-    <div v-if="currentTab === 'stats'" class="tab-content">
+    <div
+      v-if="currentTab === 'stats'"
+      class="tab-content"
+    >
       <!-- API Key 输入区域 -->
       <ApiKeyInput />
 
       <!-- 错误提示 -->
-      <div v-if="error" class="mb-8">
-        <div class="bg-red-500/20 border border-red-500/30 rounded-xl p-4 text-red-800 backdrop-blur-sm">
-          <i class="fas fa-exclamation-triangle mr-2"></i>
+      <div
+        v-if="error"
+        class="mb-6 md:mb-8"
+      >
+        <div class="bg-red-500/20 border border-red-500/30 rounded-xl p-3 md:p-4 text-red-800 backdrop-blur-sm text-sm md:text-base">
+          <i class="fas fa-exclamation-triangle mr-2" />
           {{ error }}
         </div>
       </div>
 
       <!-- 统计数据展示区域 -->
-      <div v-if="statsData" class="fade-in">
-        <div class="glass-strong rounded-3xl p-6 shadow-xl">
+      <div
+        v-if="statsData"
+        class="fade-in"
+      >
+        <div class="glass-strong rounded-3xl p-4 md:p-6 shadow-xl">
           <!-- 时间范围选择器 -->
-          <div class="mb-6 pb-6 border-b border-gray-200">
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div class="flex items-center gap-3">
-                <i class="fas fa-clock text-blue-500 text-lg"></i>
-                <span class="text-lg font-medium text-gray-700">统计时间范围</span>
+          <div class="mb-4 md:mb-6 pb-4 md:pb-6 border-b border-gray-200">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-4">
+              <div class="flex items-center gap-2 md:gap-3">
+                <i class="fas fa-clock text-blue-500 text-base md:text-lg" />
+                <span class="text-base md:text-lg font-medium text-gray-700">统计时间范围</span>
               </div>
-              <div class="flex gap-2">
+              <div class="flex gap-2 w-full md:w-auto">
                 <button 
-                  @click="switchPeriod('daily')"
                   :class="['period-btn', { 'active': statsPeriod === 'daily' }]"
-                  class="px-6 py-2 text-sm font-medium flex items-center gap-2"
+                  class="px-4 md:px-6 py-2 text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 flex-1 md:flex-none justify-center"
                   :disabled="loading || modelStatsLoading"
+                  @click="switchPeriod('daily')"
                 >
-                  <i class="fas fa-calendar-day"></i>
+                  <i class="fas fa-calendar-day text-xs md:text-sm" />
                   今日
                 </button>
                 <button 
-                  @click="switchPeriod('monthly')"
                   :class="['period-btn', { 'active': statsPeriod === 'monthly' }]"
-                  class="px-6 py-2 text-sm font-medium flex items-center gap-2"
+                  class="px-4 md:px-6 py-2 text-xs md:text-sm font-medium flex items-center gap-1 md:gap-2 flex-1 md:flex-none justify-center"
                   :disabled="loading || modelStatsLoading"
+                  @click="switchPeriod('monthly')"
                 >
-                  <i class="fas fa-calendar-alt"></i>
+                  <i class="fas fa-calendar-alt text-xs md:text-sm" />
                   本月
                 </button>
               </div>
@@ -96,7 +108,7 @@
           <StatsOverview />
 
           <!-- Token 分布和限制配置 -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
             <TokenDistribution />
             <LimitConfig />
           </div>
@@ -108,7 +120,10 @@
     </div>
 
     <!-- 教程内容 -->
-    <div v-if="currentTab === 'tutorial'" class="tab-content">
+    <div
+      v-if="currentTab === 'tutorial'"
+      class="tab-content"
+    >
       <div class="glass-strong rounded-3xl shadow-xl">
         <TutorialView />
       </div>
@@ -117,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useApiStatsStore } from '@/stores/apistats'
@@ -318,7 +333,7 @@ watch(apiKey, (newValue) => {
 
 /* Tab 胶囊按钮样式 */
 .tab-pill-button {
-  padding: 0.625rem 1.25rem;
+  padding: 0.5rem 1rem;
   border-radius: 9999px;
   font-weight: 500;
   font-size: 0.875rem;
@@ -331,6 +346,15 @@ watch(apiKey, (newValue) => {
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
+  flex: 1;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .tab-pill-button {
+    padding: 0.625rem 1.25rem;
+    flex: none;
+  }
 }
 
 .tab-pill-button:hover {

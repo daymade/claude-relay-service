@@ -17,6 +17,7 @@ class ApiKeyService {
       tokenLimit = config.limits.defaultTokenLimit,
       expiresAt = null,
       claudeAccountId = null,
+      claudeConsoleAccountId = null,
       geminiAccountId = null,
       permissions = 'all', // 'claude', 'gemini', 'all'
       isActive = true,
@@ -47,6 +48,7 @@ class ApiKeyService {
       rateLimitRequests: String(rateLimitRequests ?? 0),
       isActive: String(isActive),
       claudeAccountId: claudeAccountId || '',
+      claudeConsoleAccountId: claudeConsoleAccountId || '',
       geminiAccountId: geminiAccountId || '',
       permissions: permissions || 'all',
       enableModelRestriction: String(enableModelRestriction),
@@ -77,6 +79,7 @@ class ApiKeyService {
       rateLimitRequests: parseInt(keyData.rateLimitRequests || 0),
       isActive: keyData.isActive === 'true',
       claudeAccountId: keyData.claudeAccountId,
+      claudeConsoleAccountId: keyData.claudeConsoleAccountId,
       geminiAccountId: keyData.geminiAccountId,
       permissions: keyData.permissions,
       enableModelRestriction: keyData.enableModelRestriction === 'true',
@@ -162,6 +165,7 @@ class ApiKeyService {
           createdAt: keyData.createdAt,
           expiresAt: keyData.expiresAt,
           claudeAccountId: keyData.claudeAccountId,
+          claudeConsoleAccountId: keyData.claudeConsoleAccountId,
           geminiAccountId: keyData.geminiAccountId,
           permissions: keyData.permissions || 'all',
           tokenLimit: parseInt(keyData.tokenLimit),
@@ -188,6 +192,7 @@ class ApiKeyService {
   async getAllApiKeys() {
     try {
       const apiKeys = await redis.getAllApiKeys();
+      const client = redis.getClientSafe();
       
       // 为每个key添加使用统计和当前并发数
       for (const key of apiKeys) {
@@ -203,6 +208,19 @@ class ApiKeyService {
         key.permissions = key.permissions || 'all'; // 兼容旧数据
         key.dailyCostLimit = parseFloat(key.dailyCostLimit || 0);
         key.dailyCost = await redis.getDailyCost(key.id) || 0;
+        
+        // 获取当前时间窗口的请求次数和Token使用量
+        if (key.rateLimitWindow > 0) {
+          const requestCountKey = `rate_limit:requests:${key.id}`;
+          const tokenCountKey = `rate_limit:tokens:${key.id}`;
+          
+          key.currentWindowRequests = parseInt(await client.get(requestCountKey) || '0');
+          key.currentWindowTokens = parseInt(await client.get(tokenCountKey) || '0');
+        } else {
+          key.currentWindowRequests = 0;
+          key.currentWindowTokens = 0;
+        }
+        
         try {
           key.restrictedModels = key.restrictedModels ? JSON.parse(key.restrictedModels) : [];
         } catch (e) {
@@ -237,7 +255,7 @@ class ApiKeyService {
       }
 
       // 允许更新的字段
-      const allowedUpdates = ['name', 'description', 'tokenLimit', 'concurrencyLimit', 'rateLimitWindow', 'rateLimitRequests', 'isActive', 'claudeAccountId', 'geminiAccountId', 'permissions', 'expiresAt', 'enableModelRestriction', 'restrictedModels', 'enableClientRestriction', 'allowedClients', 'dailyCostLimit', 'tags'];
+      const allowedUpdates = ['name', 'description', 'tokenLimit', 'concurrencyLimit', 'rateLimitWindow', 'rateLimitRequests', 'isActive', 'claudeAccountId', 'claudeConsoleAccountId', 'geminiAccountId', 'permissions', 'expiresAt', 'enableModelRestriction', 'restrictedModels', 'enableClientRestriction', 'allowedClients', 'dailyCostLimit', 'tags'];
       const updatedData = { ...keyData };
 
       for (const [field, value] of Object.entries(updates)) {

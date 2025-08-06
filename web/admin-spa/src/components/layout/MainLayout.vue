@@ -1,17 +1,26 @@
 <template>
-  <div class="min-h-screen p-6">
+  <div class="min-h-screen p-3 sm:p-4 md:p-6">
     <!-- 顶部导航 -->
     <AppHeader />
     
     <!-- 主内容区域 -->
-    <div class="glass-strong rounded-3xl p-6 shadow-xl" style="z-index: 1; min-height: calc(100vh - 240px);">
+    <div
+      class="glass-strong rounded-xl sm:rounded-2xl md:rounded-3xl p-3 sm:p-4 md:p-6 shadow-xl"
+      style="z-index: 1; min-height: calc(100vh - 120px);"
+    >
       <!-- 标签栏 -->
-      <TabBar :active-tab="activeTab" @tab-change="handleTabChange" />
+      <TabBar
+        :active-tab="activeTab"
+        @tab-change="handleTabChange"
+      />
       
       <!-- 内容区域 -->
       <div class="tab-content">
         <router-view v-slot="{ Component }">
-          <transition name="slide-up" mode="out-in">
+          <transition
+            name="slide-up"
+            mode="out-in"
+          >
             <keep-alive :include="['DashboardView', 'ApiKeysView']">
               <component :is="Component" />
             </keep-alive>
