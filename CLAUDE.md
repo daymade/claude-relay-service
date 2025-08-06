@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Claude Relay Service 是一个功能完整的 AI API 中转服务，支持 Claude 和 Gemini 双平台。提供多账户管理、API Key 认证、代理配置和现代化 Web 管理界面。该服务作为客户端（如 SillyTavern、Claude Code、Gemini CLI）与 AI API 之间的中间件，提供认证、限流、监控等功能。
+Claude Relay Service 是一个功能完整的 AI API 中转服务，支持 Claude、Gemini、Claude Console 和 AWS Bedrock 多平台。提供多账户管理、API Key 认证、代理配置和现代化 Web 管理界面。该服务作为客户端（如 SillyTavern、Claude Code、Gemini CLI、Cherry Studio）与 AI API 之间的中间件，提供认证、限流、监控等功能。
 
 ## 核心架构
 
@@ -20,13 +20,22 @@ Claude Relay Service 是一个功能完整的 AI API 中转服务，支持 Claud
 - **claudeRelayService.js**: 核心代理服务，处理请求转发和流式响应
 - **claudeAccountService.js**: Claude账户管理，OAuth token刷新和账户选择
 - **geminiAccountService.js**: Gemini账户管理，Google OAuth token刷新和账户选择
+- **claudeConsoleAccountService.js**: Claude Console账户管理
+- **bedrockAccountService.js**: AWS Bedrock账户管理和认证
 - **apiKeyService.js**: API Key管理，验证、限流和使用统计
+- **unifiedClaudeScheduler.js**: 智能Claude账户调度，支持专用绑定、会话保持和优先级
+- **unifiedGeminiScheduler.js**: 智能Gemini账户调度
+- **openaiToClaude.js**: OpenAI格式转换层，提供兼容性支持
 - **oauthHelper.js**: OAuth工具，PKCE流程实现和代理支持
 
 ### 认证和代理流程
 1. 客户端使用自建API Key（cr_前缀格式）发送请求
 2. authenticateApiKey中间件验证API Key有效性和速率限制
-3. claudeAccountService自动选择可用Claude账户
+3. 统一调度器（unifiedScheduler）根据以下优先级选择账户：
+   - 专用绑定账户（dedicatedBinding）
+   - 账户组绑定（groupBinding）
+   - 会话保持映射（sessionHash sticky session）
+   - 共享账户池（按优先级排序）
 4. 检查OAuth access token有效性，过期则自动刷新（使用代理）
 5. 移除客户端API Key，使用OAuth Bearer token转发请求
 6. 通过账户配置的代理发送到Anthropic API
@@ -46,21 +55,25 @@ Claude Relay Service 是一个功能完整的 AI API 中转服务，支持 Claud
 npm install
 npm run setup                  # 生成配置和管理员凭据
 npm run install:web           # 安装Web界面依赖
+npm run build:web             # 构建Web界面
 
 # 开发和运行
 npm run dev                   # 开发模式（热重载）
 npm start                     # 生产模式
-npm test                      # 运行测试
-npm run lint                  # 代码检查
+npm test                      # 运行测试（注意：测试文件需要补充）
+npm run lint                  # ESLint代码检查
 
 # Docker部署
 docker-compose up -d          # 推荐方式
 docker-compose --profile monitoring up -d  # 包含监控
+docker pull weishaw/claude-relay-service:latest  # 使用官方镜像
 
-# 服务管理
+# 服务管理（使用PM2-like管理脚本）
 npm run service:start:daemon  # 后台启动（推荐）
 npm run service:status        # 查看服务状态
 npm run service:logs          # 查看日志
+npm run service:logs:follow   # 实时跟踪日志
+npm run service:restart:daemon # 后台重启
 npm run service:stop          # 停止服务
 
 # CLI管理工具
@@ -68,6 +81,12 @@ npm run cli admin             # 管理员操作
 npm run cli keys              # API Key管理
 npm run cli accounts          # Claude账户管理
 npm run cli status            # 系统状态
+
+# 数据迁移和维护
+npm run migrate:apikey-expiry # 迁移API Key过期时间
+npm run data:export           # 导出数据
+npm run data:import           # 导入数据
+npm run update:pricing        # 更新模型定价
 ```
 
 ### 开发环境配置
@@ -104,6 +123,9 @@ npm run setup  # 自动生成密钥并创建管理员账户
 
 ### API转发端点
 - `POST /api/v1/messages` - 主要消息处理端点（支持流式）
+- `POST /claude/v1/messages` - Claude标准格式端点
+- `POST /openai/claude/v1/messages` - OpenAI兼容格式端点
+- `POST /gemini/*` - Gemini API端点
 - `GET /api/v1/models` - 模型列表（兼容性）
 - `GET /api/v1/usage` - 使用统计查询
 - `GET /api/v1/key-info` - API Key信息
@@ -112,11 +134,13 @@ npm run setup  # 自动生成密钥并创建管理员账户
 - `POST /admin/claude-accounts/generate-auth-url` - 生成OAuth授权URL（含代理）
 - `POST /admin/claude-accounts/exchange-code` - 交换authorization code
 - `POST /admin/claude-accounts` - 创建OAuth账户
+- `POST /admin/gemini-accounts` - 创建Gemini账户
 
 ### 系统端点
 - `GET /health` - 健康检查
 - `GET /web` - Web管理界面
 - `GET /admin/dashboard` - 系统概览数据
+- `GET /admin/logs` - 系统日志查看
 
 ## 故障排除
 
@@ -156,6 +180,13 @@ npm run setup  # 自动生成密钥并创建管理员账户
 - 在修改核心服务后，使用 CLI 工具验证功能：`npm run cli status`
 - 检查日志文件 `logs/claude-relay-*.log` 确认服务正常运行
 - 注意：当前项目缺少实际测试文件，建议补充单元测试和集成测试
+
+### 代码风格规范
+- 使用单引号字符串
+- 语句末尾必须有分号
+- 使用 ES2022 语法特性
+- 未使用的变量参数使用 `_` 前缀标记
+- 遵循 ESLint 推荐规则
 
 ### 开发工作流
 - **功能开发**: 始终从理解现有代码开始，重用已有的服务和模式
@@ -197,10 +228,13 @@ npm run setup  # 自动生成密钥并创建管理员账户
 ### Redis 数据结构
 - **API Keys**: `api_key:{id}` (详细信息) + `api_key_hash:{hash}` (快速查找)
 - **Claude 账户**: `claude_account:{id}` (加密的 OAuth 数据)
+- **Gemini 账户**: `gemini_account:{id}` (加密的 OAuth 数据)
+- **账户组**: `account_group:{id}` (账户组配置)
 - **管理员**: `admin:{id}` + `admin_username:{username}` (用户名映射)
 - **会话**: `session:{token}` (JWT 会话管理)
 - **使用统计**: `usage:daily:{date}:{key}:{model}` (多维度统计)
 - **系统信息**: `system_info` (系统状态缓存)
+- **会话映射**: `session_account_mapping:{sessionHash}` (会话保持)
 
 ### 流式响应处理
 - 支持 SSE (Server-Sent Events) 流式传输
@@ -228,4 +262,37 @@ npm run cli admin reset-password -- --username admin
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.## 测试相关注意事项
+## 测试相关注意事项
+
+### 测试文件缺失
+当前项目配置了 Jest 测试框架但缺少实际的测试文件。在添加新功能时，建议：
+- 在对应服务文件同目录创建 `*.test.js` 文件
+- 使用 SuperTest 进行 API 端点测试
+- 模拟 Redis 操作避免测试依赖真实数据库
+
+### 测试单个功能示例
+```bash
+# 测试 Gemini token 刷新
+node scripts/test-gemini-refresh.js
+
+# 测试 API 响应
+node scripts/test-api-response.js
+
+# 测试账户调度
+node scripts/test-group-scheduling.js
+```
+
+## 性能优化建议
+
+### 请求处理优化
+- 使用 AbortController 管理长连接
+- 实施连接池复用 HTTPS agents
+- 避免在请求路径中进行同步操作
+- 利用 Redis 管道减少网络往返
+
+### 账户调度优化
+- 优先使用专用绑定减少调度开销
+- 合理设置账户优先级分散负载
+- 监控账户使用率避免热点
+- 定期清理过期的会话映射
