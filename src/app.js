@@ -363,7 +363,7 @@ class Application {
 
       // 存储到Redis（每次启动都覆盖，确保与 init.json 同步）
       const adminCredentials = {
-        username: adminUsername,
+        username: initData.adminUsername,
         passwordHash: passwordHash,
         createdAt: new Date().toISOString(),
         lastLogin: null,
