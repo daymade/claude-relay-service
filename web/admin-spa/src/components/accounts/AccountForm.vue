@@ -950,7 +950,7 @@
 
           <!-- 第三方代理编辑字段 -->
           <div
-            v-if="isEdit && props.account && props.account.addType === 'third-party'"
+            v-if="isEdit && form.addType === 'third-party'"
             class="space-y-4 rounded-lg border border-purple-200 bg-purple-50 p-4"
           >
             <div class="mb-4 flex items-start gap-3">
@@ -994,7 +994,7 @@
             v-if="
               form.platform !== 'claude-console' &&
               form.platform !== 'bedrock' &&
-              props.account?.addType !== 'third-party'
+              form.addType !== 'third-party'
             "
             class="rounded-lg border border-amber-200 bg-amber-50 p-4"
           >
@@ -1518,7 +1518,7 @@ const updateAccount = async () => {
     // 只有非空时才更新token（排除第三方代理账户）
     if (
       (form.value.accessToken || form.value.refreshToken) &&
-      props.account.addType !== 'third-party'
+      form.value.addType !== 'third-party'
     ) {
       if (props.account.platform === 'claude') {
         // Claude需要构建claudeAiOauth对象
@@ -1556,7 +1556,7 @@ const updateAccount = async () => {
     if (props.account.platform === 'claude') {
       data.priority = form.value.priority || 50
       // 如果是第三方代理账户，更新相关字段
-      if (props.account.addType === 'third-party') {
+      if (form.value.addType === 'third-party') {
         data.baseUrl = form.value.baseUrl
         if (form.value.apiKey) {
           data.apiKey = form.value.apiKey
