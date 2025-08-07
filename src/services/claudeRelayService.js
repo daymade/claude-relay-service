@@ -176,9 +176,7 @@ class ClaudeRelayService {
         (req) => {
           upstreamRequest = req
         },
-        options,
-        baseUrl,
-        apiKey
+        { ...options, baseUrl, apiKey }
       )
 
       // 移除监听器（请求成功完成）
@@ -547,11 +545,11 @@ class ClaudeRelayService {
     clientHeaders,
     accountId,
     onRequest,
-    requestOptions = {},
-    baseUrl = null,
-    apiKey = null
+    requestOptions = {}
   ) {
-    const url = baseUrl ? new URL(baseUrl) : new URL(this.claudeApiUrl)
+    // 使用自定义的baseUrl或默认的claudeApiUrl
+    const apiUrl = requestOptions.baseUrl || this.claudeApiUrl
+    const url = new URL(apiUrl)
 
     // 获取过滤后的客户端 headers
     const filteredHeaders = this._filterClientHeaders(clientHeaders)
@@ -583,9 +581,9 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(apiKey
-            ? { 'x-api-key': apiKey } // 第三方代理使用 x-api-key
-            : { Authorization: `Bearer ${accessToken}` }), // 普通账户使用 OAuth token
+          Authorization: requestOptions.apiKey
+            ? `Bearer ${requestOptions.apiKey}`
+            : `Bearer ${accessToken}`,
           'anthropic-version': this.apiVersion,
           ...finalHeaders
         },
@@ -801,9 +799,7 @@ class ClaudeRelayService {
         accountType,
         sessionHash,
         streamTransformer,
-        options,
-        baseUrl,
-        apiKey
+        { ...options, baseUrl, apiKey }
       )
     } catch (error) {
       logger.error('❌ Claude stream relay with usage capture failed:', error)
@@ -823,9 +819,7 @@ class ClaudeRelayService {
     accountType,
     sessionHash,
     streamTransformer = null,
-    requestOptions = {},
-    baseUrl = null,
-    apiKey = null
+    requestOptions = {}
   ) {
     // 获取过滤后的客户端 headers
     const filteredHeaders = this._filterClientHeaders(clientHeaders)
@@ -850,7 +844,9 @@ class ClaudeRelayService {
     }
 
     return new Promise((resolve, reject) => {
-      const url = baseUrl ? new URL(baseUrl) : new URL(this.claudeApiUrl)
+      // 使用自定义的baseUrl或默认的claudeApiUrl
+      const apiUrl = requestOptions.baseUrl || this.claudeApiUrl
+      const url = new URL(apiUrl)
 
       const options = {
         hostname: url.hostname,
@@ -859,9 +855,9 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(apiKey
-            ? { 'x-api-key': apiKey } // 第三方代理使用 x-api-key
-            : { Authorization: `Bearer ${accessToken}` }), // 普通账户使用 OAuth token
+          Authorization: requestOptions.apiKey
+            ? `Bearer ${requestOptions.apiKey}`
+            : `Bearer ${accessToken}`,
           'anthropic-version': this.apiVersion,
           ...finalHeaders
         },
