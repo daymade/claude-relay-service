@@ -124,7 +124,25 @@ class ClaudeRelayService {
       )
 
       // 获取有效的访问token
-      const accessToken = await claudeAccountService.getValidAccessToken(accountId)
+      const tokenInfo = await claudeAccountService.getValidAccessToken(accountId)
+
+      // 检查是否是第三方账户
+      let accessToken, baseUrl, apiKey
+      if (tokenInfo && typeof tokenInfo === 'object' && tokenInfo.isThirdParty) {
+        // 第三方账户，使用自定义的base URL和API key
+        accessToken = null
+        // 第三方代理的baseUrl需要加上/v1/messages路径
+        baseUrl = tokenInfo.baseUrl.endsWith('/')
+          ? `${tokenInfo.baseUrl}v1/messages`
+          : `${tokenInfo.baseUrl}/v1/messages`
+        apiKey = tokenInfo.apiKey
+        logger.info(`🌐 Using third-party proxy: ${baseUrl}`)
+      } else {
+        // 普通账户，使用OAuth token
+        accessToken = tokenInfo
+        baseUrl = null
+        apiKey = null
+      }
 
       // 处理请求体（传递 clientHeaders 以判断是否需要设置 Claude Code 系统提示词）
       const processedBody = this._processRequestBody(requestBody, clientHeaders)
@@ -158,7 +176,9 @@ class ClaudeRelayService {
         (req) => {
           upstreamRequest = req
         },
-        options
+        options,
+        baseUrl,
+        apiKey
       )
 
       // 移除监听器（请求成功完成）
@@ -527,9 +547,11 @@ class ClaudeRelayService {
     clientHeaders,
     accountId,
     onRequest,
-    requestOptions = {}
+    requestOptions = {},
+    baseUrl = null,
+    apiKey = null
   ) {
-    const url = new URL(this.claudeApiUrl)
+    const url = baseUrl ? new URL(baseUrl) : new URL(this.claudeApiUrl)
 
     // 获取过滤后的客户端 headers
     const filteredHeaders = this._filterClientHeaders(clientHeaders)
@@ -561,7 +583,9 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
+          ...(apiKey
+            ? { 'x-api-key': apiKey } // 第三方代理使用 x-api-key
+            : { Authorization: `Bearer ${accessToken}` }), // 普通账户使用 OAuth token
           'anthropic-version': this.apiVersion,
           ...finalHeaders
         },
@@ -736,7 +760,25 @@ class ClaudeRelayService {
       )
 
       // 获取有效的访问token
-      const accessToken = await claudeAccountService.getValidAccessToken(accountId)
+      const tokenInfo = await claudeAccountService.getValidAccessToken(accountId)
+
+      // 检查是否是第三方账户
+      let accessToken, baseUrl, apiKey
+      if (tokenInfo && typeof tokenInfo === 'object' && tokenInfo.isThirdParty) {
+        // 第三方账户，使用自定义的base URL和API key
+        accessToken = null
+        // 第三方代理的baseUrl需要加上/v1/messages路径
+        baseUrl = tokenInfo.baseUrl.endsWith('/')
+          ? `${tokenInfo.baseUrl}v1/messages`
+          : `${tokenInfo.baseUrl}/v1/messages`
+        apiKey = tokenInfo.apiKey
+        logger.info(`🌐 [Stream] Using third-party proxy: ${baseUrl}`)
+      } else {
+        // 普通账户，使用OAuth token
+        accessToken = tokenInfo
+        baseUrl = null
+        apiKey = null
+      }
 
       // 处理请求体（传递 clientHeaders 以判断是否需要设置 Claude Code 系统提示词）
       const processedBody = this._processRequestBody(requestBody, clientHeaders)
@@ -759,7 +801,9 @@ class ClaudeRelayService {
         accountType,
         sessionHash,
         streamTransformer,
-        options
+        options,
+        baseUrl,
+        apiKey
       )
     } catch (error) {
       logger.error('❌ Claude stream relay with usage capture failed:', error)
@@ -779,7 +823,9 @@ class ClaudeRelayService {
     accountType,
     sessionHash,
     streamTransformer = null,
-    requestOptions = {}
+    requestOptions = {},
+    baseUrl = null,
+    apiKey = null
   ) {
     // 获取过滤后的客户端 headers
     const filteredHeaders = this._filterClientHeaders(clientHeaders)
@@ -804,7 +850,7 @@ class ClaudeRelayService {
     }
 
     return new Promise((resolve, reject) => {
-      const url = new URL(this.claudeApiUrl)
+      const url = baseUrl ? new URL(baseUrl) : new URL(this.claudeApiUrl)
 
       const options = {
         hostname: url.hostname,
@@ -813,7 +859,9 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
+          ...(apiKey
+            ? { 'x-api-key': apiKey } // 第三方代理使用 x-api-key
+            : { Authorization: `Bearer ${accessToken}` }), // 普通账户使用 OAuth token
           'anthropic-version': this.apiVersion,
           ...finalHeaders
         },
