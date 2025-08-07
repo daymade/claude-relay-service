@@ -147,7 +147,10 @@ class ClaudeAccountService {
       status: accountData.status,
       createdAt: accountData.createdAt,
       expiresAt: accountData.expiresAt,
-      scopes: claudeAiOauth ? claudeAiOauth.scopes : []
+      scopes: claudeAiOauth ? claudeAiOauth.scopes : [],
+      addType,
+      baseUrl,
+      apiKey: apiKey ? '***' : '' // 返回时不暴露真实API密钥
     }
   }
 
@@ -160,6 +163,19 @@ class ClaudeAccountService {
 
       if (!accountData || Object.keys(accountData).length === 0) {
         throw new Error('Account not found')
+      }
+
+      // 第三方账户不需要刷新token
+      if (accountData.addType === 'third-party') {
+        logger.info(
+          `🚫 Third-party account does not require token refresh: ${accountData.name} (${accountId})`
+        )
+        return {
+          success: true,
+          accessToken: null,
+          expiresAt: null,
+          isThirdParty: true
+        }
       }
 
       const refreshToken = this._decryptSensitiveData(accountData.refreshToken)
@@ -386,6 +402,9 @@ class ClaudeAccountService {
             status: account.status,
             errorMessage: account.errorMessage,
             accountType: account.accountType || 'shared', // 兼容旧数据，默认为共享
+            addType: account.addType || 'oauth', // 兼容旧数据
+            baseUrl: account.baseUrl || '',
+            apiKey: account.apiKey ? '***' : '', // 不暴露真实API密钥
             priority: parseInt(account.priority) || 50, // 兼容旧数据，默认优先级50
             platform: 'claude-oauth', // 添加平台标识，用于前端区分
             createdAt: account.createdAt,
@@ -441,6 +460,9 @@ class ClaudeAccountService {
         'isActive',
         'claudeAiOauth',
         'accountType',
+        'baseUrl',
+        'apiKey',
+        'addType',
         'priority',
         'schedulable'
       ]
@@ -451,7 +473,7 @@ class ClaudeAccountService {
 
       for (const [field, value] of Object.entries(updates)) {
         if (allowedUpdates.includes(field)) {
-          if (['email', 'password', 'refreshToken'].includes(field)) {
+          if (['email', 'password', 'refreshToken', 'apiKey'].includes(field)) {
             updatedData[field] = this._encryptSensitiveData(value)
           } else if (field === 'proxy') {
             updatedData[field] = value ? JSON.stringify(value) : ''

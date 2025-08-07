@@ -189,8 +189,10 @@
                       >
                         <i class="fas fa-folder mr-1" />{{ account.groupInfo.name }}
                       </span>
-                      <span v-if="account.addType === 'third-party'" 
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      <span
+                        v-if="account.addType === 'third-party'"
+                        class="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800"
+                      >
                         <i class="fas fa-globe mr-1"></i>第三方
                       </span>
                     </div>

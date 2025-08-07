@@ -97,13 +97,8 @@
                   <input v-model="form.addType" class="mr-2" type="radio" value="manual" />
                   <span class="text-sm text-gray-700">手动输入 Access Token</span>
                 </label>
-                <label class="flex items-center cursor-pointer" v-if="form.platform === 'claude'">
-                  <input 
-                    v-model="form.addType" 
-                    type="radio" 
-                    value="third-party" 
-                    class="mr-2"
-                  >
+                <label v-if="form.platform === 'claude'" class="flex cursor-pointer items-center">
+                  <input v-model="form.addType" class="mr-2" type="radio" value="third-party" />
                   <span class="text-sm text-gray-700">第三方代理</span>
                 </label>
               </div>
@@ -465,6 +460,59 @@
                 />
                 <p class="mt-1 text-xs text-gray-500">
                   当账号返回429错误时，暂停调度的时间（分钟）
+                </p>
+              </div>
+            </div>
+
+            <!-- 第三方代理字段 -->
+            <div
+              v-if="form.platform === 'claude' && form.addType === 'third-party' && !isEdit"
+              class="space-y-4 rounded-lg border border-green-200 bg-green-50 p-4"
+            >
+              <div class="mb-4 flex items-start gap-3">
+                <div
+                  class="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-green-500"
+                >
+                  <i class="fas fa-globe text-sm text-white" />
+                </div>
+                <div>
+                  <h5 class="mb-2 font-semibold text-green-900">第三方代理配置</h5>
+                  <p class="text-sm text-green-800">
+                    配置第三方 Claude API 代理服务，如智谱AI等兼容 Claude API 的服务
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label class="mb-3 block text-sm font-semibold text-gray-700">代理 URL *</label>
+                <input
+                  v-model="form.baseUrl"
+                  class="form-input w-full"
+                  :class="{ 'border-red-500': errors.baseUrl }"
+                  placeholder="例如：https://open.bigmodel.cn/api/paas"
+                  required
+                  type="text"
+                />
+                <p v-if="errors.baseUrl" class="mt-1 text-xs text-red-500">
+                  {{ errors.baseUrl }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500">
+                  第三方服务的 API 基础 URL，不需要包含 /v1/messages 路径
+                </p>
+              </div>
+
+              <div>
+                <label class="mb-3 block text-sm font-semibold text-gray-700">API 密钥 *</label>
+                <input
+                  v-model="form.apiKey"
+                  class="form-input w-full"
+                  :class="{ 'border-red-500': errors.apiKey }"
+                  placeholder="请输入第三方服务的 API 密钥"
+                  required
+                  type="password"
+                />
+                <p v-if="errors.apiKey" class="mt-1 text-xs text-red-500">
+                  {{ errors.apiKey }}
                 </p>
               </div>
             </div>
@@ -921,28 +969,58 @@
             </div>
 
             <div class="space-y-4">
-              <div>
-                <label class="mb-3 block text-sm font-semibold text-gray-700"
-                  >新的 Access Token</label
-                >
-                <textarea
-                  v-model="form.accessToken"
-                  class="form-input w-full resize-none font-mono text-xs"
-                  placeholder="留空表示不更新..."
-                  rows="4"
-                />
+              <!-- 第三方代理账户字段 -->
+              <div v-if="props.account?.addType === 'third-party'">
+                <div>
+                  <label class="mb-3 block text-sm font-semibold text-gray-700">代理 URL</label>
+                  <input
+                    v-model="form.baseUrl"
+                    class="form-input w-full"
+                    placeholder="例如：https://open.bigmodel.cn/api/paas"
+                    type="text"
+                  />
+                  <p class="mt-1 text-xs text-gray-500">
+                    第三方服务的 API 基础 URL，不需要包含 /v1/messages 路径
+                  </p>
+                </div>
+
+                <div class="mt-4">
+                  <label class="mb-3 block text-sm font-semibold text-gray-700">API 密钥</label>
+                  <input
+                    v-model="form.apiKey"
+                    class="form-input w-full"
+                    placeholder="留空表示不更新"
+                    type="password"
+                  />
+                  <p class="mt-1 text-xs text-gray-500">留空表示不更新 API 密钥</p>
+                </div>
               </div>
 
-              <div>
-                <label class="mb-3 block text-sm font-semibold text-gray-700"
-                  >新的 Refresh Token</label
-                >
-                <textarea
-                  v-model="form.refreshToken"
-                  class="form-input w-full resize-none font-mono text-xs"
-                  placeholder="留空表示不更新..."
-                  rows="4"
-                />
+              <!-- OAuth账户字段 -->
+              <div v-else>
+                <div>
+                  <label class="mb-3 block text-sm font-semibold text-gray-700"
+                    >新的 Access Token</label
+                  >
+                  <textarea
+                    v-model="form.accessToken"
+                    class="form-input w-full resize-none font-mono text-xs"
+                    placeholder="留空表示不更新..."
+                    rows="4"
+                  />
+                </div>
+
+                <div>
+                  <label class="mb-3 block text-sm font-semibold text-gray-700"
+                    >新的 Refresh Token</label
+                  >
+                  <textarea
+                    v-model="form.refreshToken"
+                    class="form-input w-full resize-none font-mono text-xs"
+                    placeholder="留空表示不更新..."
+                    rows="4"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1288,18 +1366,26 @@ const createAccount = async () => {
     }
 
     if (form.value.platform === 'claude') {
-      // Claude手动模式需要构建claudeAiOauth对象
-      const expiresInMs = form.value.refreshToken
-        ? 10 * 60 * 1000 // 10分钟
-        : 365 * 24 * 60 * 60 * 1000 // 1年
+      if (form.value.addType === 'third-party') {
+        // 第三方代理模式
+        data.addType = 'third-party'
+        data.baseUrl = form.value.baseUrl
+        data.apiKey = form.value.apiKey
+        data.priority = form.value.priority || 50
+      } else {
+        // Claude手动模式需要构建claudeAiOauth对象
+        const expiresInMs = form.value.refreshToken
+          ? 10 * 60 * 1000 // 10分钟
+          : 365 * 24 * 60 * 60 * 1000 // 1年
 
-      data.claudeAiOauth = {
-        accessToken: form.value.accessToken,
-        refreshToken: form.value.refreshToken || '',
-        expiresAt: Date.now() + expiresInMs,
-        scopes: ['user:inference']
+        data.claudeAiOauth = {
+          accessToken: form.value.accessToken,
+          refreshToken: form.value.refreshToken || '',
+          expiresAt: Date.now() + expiresInMs,
+          scopes: ['user:inference']
+        }
+        data.priority = form.value.priority || 50
       }
-      data.priority = form.value.priority || 50
     } else if (form.value.platform === 'gemini') {
       // Gemini手动模式需要构建geminiOauth对象
       const expiresInMs = form.value.refreshToken
@@ -1417,16 +1503,23 @@ const updateAccount = async () => {
     // 只有非空时才更新token
     if (form.value.accessToken || form.value.refreshToken) {
       if (props.account.platform === 'claude') {
-        // Claude需要构建claudeAiOauth对象
-        const expiresInMs = form.value.refreshToken
-          ? 10 * 60 * 1000 // 10分钟
-          : 365 * 24 * 60 * 60 * 1000 // 1年
+        // 如果是第三方代理账户，accessToken实际上是apiKey
+        if (props.account.addType === 'third-party') {
+          if (form.value.accessToken) {
+            data.apiKey = form.value.accessToken
+          }
+        } else {
+          // Claude需要构建claudeAiOauth对象
+          const expiresInMs = form.value.refreshToken
+            ? 10 * 60 * 1000 // 10分钟
+            : 365 * 24 * 60 * 60 * 1000 // 1年
 
-        data.claudeAiOauth = {
-          accessToken: form.value.accessToken || '',
-          refreshToken: form.value.refreshToken || '',
-          expiresAt: Date.now() + expiresInMs,
-          scopes: ['user:inference']
+          data.claudeAiOauth = {
+            accessToken: form.value.accessToken || '',
+            refreshToken: form.value.refreshToken || '',
+            expiresAt: Date.now() + expiresInMs,
+            scopes: ['user:inference']
+          }
         }
       } else if (props.account.platform === 'gemini') {
         // Gemini需要构建geminiOauth对象
@@ -1448,9 +1541,16 @@ const updateAccount = async () => {
       data.projectId = form.value.projectId
     }
 
-    // Claude 官方账号优先级更新
+    // Claude 官方账号优先级和第三方代理字段更新
     if (props.account.platform === 'claude') {
       data.priority = form.value.priority || 50
+      // 如果是第三方代理账户，更新相关字段
+      if (props.account.addType === 'third-party') {
+        data.baseUrl = form.value.baseUrl
+        if (form.value.apiKey) {
+          data.apiKey = form.value.apiKey
+        }
+      }
     }
 
     // Claude Console 特定更新
@@ -1551,11 +1651,14 @@ watch(
 )
 
 // 监听Base URL变化，清除错误
-watch(() => form.value.baseUrl, () => {
-  if (errors.value.baseUrl && form.value.baseUrl?.trim()) {
-    errors.value.baseUrl = ''
+watch(
+  () => form.value.baseUrl,
+  () => {
+    if (errors.value.baseUrl && form.value.baseUrl?.trim()) {
+      errors.value.baseUrl = ''
+    }
   }
-})
+)
 
 // 分组相关数据
 const groups = ref([])
@@ -1686,7 +1789,7 @@ watch(
 
       form.value = {
         platform: newAccount.platform,
-        addType: 'oauth',
+        addType: newAccount.addType || 'oauth', // 保留原始的addType
         name: newAccount.name,
         description: newAccount.description || '',
         accountType: newAccount.accountType || 'shared',
@@ -1699,6 +1802,8 @@ watch(
         apiUrl: newAccount.apiUrl || '',
         apiKey: '', // 编辑模式不显示现有的 API Key
         priority: newAccount.priority || 50,
+        // 第三方代理字段
+        baseUrl: newAccount.baseUrl || '',
         supportedModels: (() => {
           const models = newAccount.supportedModels
           if (!models) return ''

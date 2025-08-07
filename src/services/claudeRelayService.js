@@ -135,7 +135,7 @@ class ClaudeRelayService {
         baseUrl = tokenInfo.baseUrl.endsWith('/')
           ? `${tokenInfo.baseUrl}v1/messages`
           : `${tokenInfo.baseUrl}/v1/messages`
-        apiKey = tokenInfo.apiKey
+        ;({ apiKey } = tokenInfo)
         logger.info(`🌐 Using third-party proxy: ${baseUrl}`)
       } else {
         // 普通账户，使用OAuth token
@@ -769,7 +769,7 @@ class ClaudeRelayService {
         baseUrl = tokenInfo.baseUrl.endsWith('/')
           ? `${tokenInfo.baseUrl}v1/messages`
           : `${tokenInfo.baseUrl}/v1/messages`
-        apiKey = tokenInfo.apiKey
+        ;({ apiKey } = tokenInfo)
         logger.info(`🌐 [Stream] Using third-party proxy: ${baseUrl}`)
       } else {
         // 普通账户，使用OAuth token
