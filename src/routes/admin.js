@@ -1096,19 +1096,19 @@ router.post('/claude-accounts', authenticateAdmin, async (req, res) => {
     // 验证第三方账户的必填字段
     if (addType === 'third-party') {
       if (!baseUrl) {
-        return res.status(400).json({ error: 'Base URL is required for third-party accounts' });
+        return res.status(400).json({ error: 'Base URL is required for third-party accounts' })
       }
       if (!apiKey) {
-        return res.status(400).json({ error: 'API Key is required for third-party accounts' });
+        return res.status(400).json({ error: 'API Key is required for third-party accounts' })
       }
       // 验证baseUrl是HTTPS URL
       try {
-        const url = new URL(baseUrl);
+        const url = new URL(baseUrl)
         if (url.protocol !== 'https:') {
-          return res.status(400).json({ error: 'Base URL must use HTTPS protocol' });
+          return res.status(400).json({ error: 'Base URL must use HTTPS protocol' })
         }
       } catch (e) {
-        return res.status(400).json({ error: 'Invalid base URL format' });
+        return res.status(400).json({ error: 'Invalid base URL format' })
       }
     }
 

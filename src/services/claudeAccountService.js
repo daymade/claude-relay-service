@@ -71,7 +71,10 @@ class ClaudeAccountService {
         lastRefreshAt: '',
         status: 'active', // 有OAuth数据的账户直接设为active
         errorMessage: '',
-        schedulable: schedulable.toString() // 是否可被调度
+        schedulable: schedulable.toString(), // 是否可被调度
+        addType, // 添加账户类型
+        baseUrl, // 第三方代理URL
+        apiKey: apiKey ? this._encryptSensitiveData(apiKey) : '' // 第三方API密钥（加密）
       }
     } else {
       // 兼容旧格式
@@ -94,7 +97,10 @@ class ClaudeAccountService {
         lastRefreshAt: '',
         status: 'created', // created, active, expired, error
         errorMessage: '',
-        schedulable: schedulable.toString() // 是否可被调度
+        schedulable: schedulable.toString(), // 是否可被调度
+        addType, // 添加账户类型
+        baseUrl, // 第三方代理URL
+        apiKey: apiKey ? this._encryptSensitiveData(apiKey) : '' // 第三方API密钥（加密）
       }
     }
 
@@ -276,14 +282,14 @@ class ClaudeAccountService {
       // 第三方账户返回特殊标记
       if (accountData.addType === 'third-party') {
         // 更新最后使用时间
-        accountData.lastUsedAt = new Date().toISOString();
-        await redis.setClaudeAccount(accountId, accountData);
-        
+        accountData.lastUsedAt = new Date().toISOString()
+        await redis.setClaudeAccount(accountId, accountData)
+
         return {
           isThirdParty: true,
           apiKey: this._decryptSensitiveData(accountData.apiKey),
           baseUrl: accountData.baseUrl
-        };
+        }
       }
 
       // 检查token是否过期
