@@ -49,7 +49,34 @@ class ClaudeAccountService {
 
     let accountData
 
-    if (claudeAiOauth) {
+    if (addType === 'third-party') {
+      // 第三方代理账户
+      accountData = {
+        id: accountId,
+        name,
+        description,
+        email: '',
+        password: '',
+        claudeAiOauth: '',
+        accessToken: '',
+        refreshToken: '',
+        expiresAt: '',
+        scopes: '',
+        proxy: proxy ? JSON.stringify(proxy) : '',
+        isActive: isActive.toString(),
+        accountType, // 账号类型：'dedicated' 或 'shared'
+        priority: priority.toString(), // 调度优先级
+        createdAt: new Date().toISOString(),
+        lastUsedAt: '',
+        lastRefreshAt: '',
+        status: 'active', // 第三方账户直接设为active
+        errorMessage: '',
+        addType,
+        baseUrl, // 存储第三方API基础URL
+        apiKey: this._encryptSensitiveData(apiKey), // 加密存储API密钥
+        schedulable: schedulable.toString() // 是否可被调度
+      }
+    } else if (claudeAiOauth) {
       // 使用Claude标准格式的OAuth数据
       accountData = {
         id: accountId,
@@ -71,10 +98,10 @@ class ClaudeAccountService {
         lastRefreshAt: '',
         status: 'active', // 有OAuth数据的账户直接设为active
         errorMessage: '',
-        schedulable: schedulable.toString(), // 是否可被调度
-        addType, // 添加账户类型
-        baseUrl, // 第三方代理URL
-        apiKey: apiKey ? this._encryptSensitiveData(apiKey) : '' // 第三方API密钥（加密）
+        addType: addType || 'oauth',
+        baseUrl: '',
+        apiKey: '',
+        schedulable: schedulable.toString() // 是否可被调度
       }
     } else {
       // 兼容旧格式
@@ -97,10 +124,10 @@ class ClaudeAccountService {
         lastRefreshAt: '',
         status: 'created', // created, active, expired, error
         errorMessage: '',
-        schedulable: schedulable.toString(), // 是否可被调度
-        addType, // 添加账户类型
-        baseUrl, // 第三方代理URL
-        apiKey: apiKey ? this._encryptSensitiveData(apiKey) : '' // 第三方API密钥（加密）
+        addType: addType || 'manual',
+        baseUrl: '',
+        apiKey: '',
+        schedulable: schedulable.toString() // 是否可被调度
       }
     }
 
