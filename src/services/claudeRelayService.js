@@ -622,12 +622,29 @@ class ClaudeRelayService {
         options.headers['User-Agent'] = 'claude-cli/1.0.57 (external, cli)'
       }
 
-      // 使用自定义的 betaHeader 或默认值
-      const betaHeader =
-        requestOptions?.betaHeader !== undefined ? requestOptions.betaHeader : this.betaHeader
-      if (betaHeader) {
-        options.headers['anthropic-beta'] = betaHeader
+      // 使用自定义的 betaHeader 或默认值（第三方代理不添加 beta headers）
+      if (!requestOptions.apiKey) {
+        // 只有非第三方代理才添加 Claude 特有的 beta headers
+        const betaHeader =
+          requestOptions?.betaHeader !== undefined ? requestOptions.betaHeader : this.betaHeader
+        if (betaHeader) {
+          options.headers['anthropic-beta'] = betaHeader
+        }
+      } else {
+        logger.info(`🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`)
       }
+
+      // Log headers being sent (for debugging)
+      logger.info(`📤 Sending request to ${options.hostname}${options.path} with headers:`, {
+        headers: Object.keys(options.headers).reduce((acc, key) => {
+          if (key.toLowerCase() === 'authorization') {
+            acc[key] = options.headers[key].substring(0, 20) + '...'
+          } else {
+            acc[key] = options.headers[key]
+          }
+          return acc
+        }, {})
+      })
 
       const req = https.request(options, (res) => {
         let responseData = Buffer.alloc(0)
@@ -896,12 +913,29 @@ class ClaudeRelayService {
         options.headers['User-Agent'] = 'claude-cli/1.0.57 (external, cli)'
       }
 
-      // 使用自定义的 betaHeader 或默认值
-      const betaHeader =
-        requestOptions?.betaHeader !== undefined ? requestOptions.betaHeader : this.betaHeader
-      if (betaHeader) {
-        options.headers['anthropic-beta'] = betaHeader
+      // 使用自定义的 betaHeader 或默认值（第三方代理不添加 beta headers）
+      if (!requestOptions.apiKey) {
+        // 只有非第三方代理才添加 Claude 特有的 beta headers
+        const betaHeader =
+          requestOptions?.betaHeader !== undefined ? requestOptions.betaHeader : this.betaHeader
+        if (betaHeader) {
+          options.headers['anthropic-beta'] = betaHeader
+        }
+      } else {
+        logger.info(`🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`)
       }
+
+      // Log headers being sent (for debugging)
+      logger.info(`📤 Sending request to ${options.hostname}${options.path} with headers:`, {
+        headers: Object.keys(options.headers).reduce((acc, key) => {
+          if (key.toLowerCase() === 'authorization') {
+            acc[key] = options.headers[key].substring(0, 20) + '...'
+          } else {
+            acc[key] = options.headers[key]
+          }
+          return acc
+        }, {})
+      })
 
       const req = https.request(options, (res) => {
         logger.debug(`🌊 Claude stream response status: ${res.statusCode}`)
@@ -1210,7 +1244,9 @@ class ClaudeRelayService {
     requestOptions = {}
   ) {
     return new Promise((resolve, reject) => {
-      const url = new URL(this.claudeApiUrl)
+      // 使用自定义的baseUrl或默认的claudeApiUrl
+      const apiUrl = requestOptions.baseUrl || this.claudeApiUrl
+      const url = new URL(apiUrl)
 
       // 获取过滤后的客户端 headers
       const filteredHeaders = this._filterClientHeaders(clientHeaders)
@@ -1222,7 +1258,9 @@ class ClaudeRelayService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: requestOptions.apiKey
+            ? `Bearer ${requestOptions.apiKey}`
+            : `Bearer ${accessToken}`,
           'anthropic-version': this.apiVersion,
           ...filteredHeaders
         },
@@ -1235,12 +1273,29 @@ class ClaudeRelayService {
         options.headers['User-Agent'] = 'claude-cli/1.0.53 (external, cli)'
       }
 
-      // 使用自定义的 betaHeader 或默认值
-      const betaHeader =
-        requestOptions?.betaHeader !== undefined ? requestOptions.betaHeader : this.betaHeader
-      if (betaHeader) {
-        options.headers['anthropic-beta'] = betaHeader
+      // 使用自定义的 betaHeader 或默认值（第三方代理不添加 beta headers）
+      if (!requestOptions.apiKey) {
+        // 只有非第三方代理才添加 Claude 特有的 beta headers
+        const betaHeader =
+          requestOptions?.betaHeader !== undefined ? requestOptions.betaHeader : this.betaHeader
+        if (betaHeader) {
+          options.headers['anthropic-beta'] = betaHeader
+        }
+      } else {
+        logger.info(`🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`)
       }
+
+      // Log headers being sent (for debugging)
+      logger.info(`📤 Sending request to ${options.hostname}${options.path} with headers:`, {
+        headers: Object.keys(options.headers).reduce((acc, key) => {
+          if (key.toLowerCase() === 'authorization') {
+            acc[key] = options.headers[key].substring(0, 20) + '...'
+          } else {
+            acc[key] = options.headers[key]
+          }
+          return acc
+        }, {})
+      })
 
       const req = https.request(options, (res) => {
         // 设置响应头
