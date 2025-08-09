@@ -631,14 +631,16 @@ class ClaudeRelayService {
           options.headers['anthropic-beta'] = betaHeader
         }
       } else {
-        logger.info(`🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`)
+        logger.info(
+          `🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`
+        )
       }
 
       // Log headers being sent (for debugging)
       logger.info(`📤 Sending request to ${options.hostname}${options.path} with headers:`, {
         headers: Object.keys(options.headers).reduce((acc, key) => {
           if (key.toLowerCase() === 'authorization') {
-            acc[key] = options.headers[key].substring(0, 20) + '...'
+            acc[key] = `${options.headers[key].substring(0, 20)}...`
           } else {
             acc[key] = options.headers[key]
           }
@@ -922,14 +924,16 @@ class ClaudeRelayService {
           options.headers['anthropic-beta'] = betaHeader
         }
       } else {
-        logger.info(`🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`)
+        logger.info(
+          `🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`
+        )
       }
 
       // Log headers being sent (for debugging)
       logger.info(`📤 Sending request to ${options.hostname}${options.path} with headers:`, {
         headers: Object.keys(options.headers).reduce((acc, key) => {
           if (key.toLowerCase() === 'authorization') {
-            acc[key] = options.headers[key].substring(0, 20) + '...'
+            acc[key] = `${options.headers[key].substring(0, 20)}...`
           } else {
             acc[key] = options.headers[key]
           }
@@ -1282,14 +1286,16 @@ class ClaudeRelayService {
           options.headers['anthropic-beta'] = betaHeader
         }
       } else {
-        logger.info(`🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`)
+        logger.info(
+          `🚫 Skipping beta headers for third-party proxy (apiKey: ${requestOptions.apiKey ? 'present' : 'absent'})`
+        )
       }
 
       // Log headers being sent (for debugging)
       logger.info(`📤 Sending request to ${options.hostname}${options.path} with headers:`, {
         headers: Object.keys(options.headers).reduce((acc, key) => {
           if (key.toLowerCase() === 'authorization') {
-            acc[key] = options.headers[key].substring(0, 20) + '...'
+            acc[key] = `${options.headers[key].substring(0, 20)}...`
           } else {
             acc[key] = options.headers[key]
           }

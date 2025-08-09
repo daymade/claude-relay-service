@@ -404,7 +404,12 @@ class ClaudeAccountService {
             accountType: account.accountType || 'shared', // 兼容旧数据，默认为共享
             addType: account.addType || 'oauth', // 兼容旧数据
             baseUrl: account.baseUrl || '',
-            apiKey: account.addType === 'third-party' && account.apiKey ? this._decryptSensitiveData(account.apiKey) : (account.apiKey ? '***' : ''), // 第三方代理需要返回真实API密钥
+            apiKey:
+              account.addType === 'third-party' && account.apiKey
+                ? this._decryptSensitiveData(account.apiKey)
+                : account.apiKey
+                  ? '***'
+                  : '', // 第三方代理需要返回真实API密钥
             priority: parseInt(account.priority) || 50, // 兼容旧数据，默认优先级50
             platform: 'claude-oauth', // 添加平台标识，用于前端区分
             createdAt: account.createdAt,

@@ -9,7 +9,6 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
-!.env.production
 
 # Claude specific directories
 .claude/
@@ -139,11 +138,13 @@ desktop.ini
 *.swp
 *.swo
 *~
-.cursorindexingignore
 
 # Backup files
 *.bak
 *.backup
+*.backup.*
+.env.backup.*
+config.js.backup.*
 *~
 
 # Archive files (unless specifically needed)
@@ -188,9 +189,6 @@ grafana/
 test-results/
 coverage/
 .nyc_output/
-.specstory/
-docker-compose.test.yml
-scripts/test-*.sh
 
 # Documentation build
 docs/build/
