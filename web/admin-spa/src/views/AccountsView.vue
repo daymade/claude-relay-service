@@ -6,36 +6,90 @@
           <h3 class="mb-1 text-lg font-bold text-gray-900 sm:mb-2 sm:text-xl">账户管理</h3>
           <p class="text-sm text-gray-600 sm:text-base">管理您的 Claude 和 Gemini 账户及代理配置</p>
         </div>
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex flex-col gap-2 sm:flex-row">
-            <select
-              v-model="accountSortBy"
-              class="form-input w-full px-3 py-2 text-sm sm:w-auto"
-              @change="sortAccounts()"
-            >
-              <option value="name">按名称排序</option>
-              <option value="dailyTokens">按今日Token排序</option>
-              <option value="dailyRequests">按今日请求数排序</option>
-              <option value="totalTokens">按总Token排序</option>
-              <option value="lastUsed">按最后使用排序</option>
-            </select>
-            <select
-              v-model="groupFilter"
-              class="form-input w-full px-3 py-2 text-sm sm:w-auto"
-              @change="filterByGroup"
-            >
-              <option value="all">所有账户</option>
-              <option value="ungrouped">未分组账户</option>
-              <option v-for="group in accountGroups" :key="group.id" :value="group.id">
-                {{ group.name }} ({{ group.platform === 'claude' ? 'Claude' : 'Gemini' }})
-              </option>
-            </select>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <!-- 筛选器组 -->
+          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <!-- 排序选择器 -->
+            <div class="group relative min-w-[160px]">
+              <div
+                class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
+              ></div>
+              <CustomDropdown
+                v-model="accountSortBy"
+                icon="fa-sort-amount-down"
+                icon-color="text-indigo-500"
+                :options="sortOptions"
+                placeholder="选择排序"
+                @change="sortAccounts()"
+              />
+            </div>
+
+            <!-- 平台筛选器 -->
+            <div class="group relative min-w-[140px]">
+              <div
+                class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
+              ></div>
+              <CustomDropdown
+                v-model="platformFilter"
+                icon="fa-server"
+                icon-color="text-blue-500"
+                :options="platformOptions"
+                placeholder="选择平台"
+                @change="filterByPlatform"
+              />
+            </div>
+
+            <!-- 分组筛选器 -->
+            <div class="group relative min-w-[160px]">
+              <div
+                class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
+              ></div>
+              <CustomDropdown
+                v-model="groupFilter"
+                icon="fa-layer-group"
+                icon-color="text-purple-500"
+                :options="groupOptions"
+                placeholder="选择分组"
+                @change="filterByGroup"
+              />
+            </div>
+
+            <!-- 刷新按钮 -->
+            <div class="relative">
+              <el-tooltip
+                content="刷新数据 (Ctrl/⌘+点击强制刷新所有缓存)"
+                effect="dark"
+                placement="bottom"
+              >
+                <button
+                  class="group relative flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 hover:border-gray-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  :disabled="accountsLoading"
+                  @click.ctrl.exact="loadAccounts(true)"
+                  @click.exact="loadAccounts(false)"
+                  @click.meta.exact="loadAccounts(true)"
+                >
+                  <div
+                    class="absolute -inset-0.5 rounded-lg bg-gradient-to-r from-green-500 to-teal-500 opacity-0 blur transition duration-300 group-hover:opacity-20"
+                  ></div>
+                  <i
+                    :class="[
+                      'fas relative text-green-500',
+                      accountsLoading ? 'fa-spinner fa-spin' : 'fa-sync-alt'
+                    ]"
+                  />
+                  <span class="relative">刷新</span>
+                </button>
+              </el-tooltip>
+            </div>
           </div>
+
+          <!-- 添加账户按钮 -->
           <button
-            class="btn btn-success flex w-full items-center justify-center gap-2 px-4 py-2 sm:w-auto sm:px-6 sm:py-3"
+            class="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-200 hover:from-green-600 hover:to-green-700 hover:shadow-lg sm:w-auto"
             @click.stop="openCreateAccountModal"
           >
-            <i class="fas fa-plus" />添加账户
+            <i class="fas fa-plus"></i>
+            <span>添加账户</span>
           </button>
         </div>
       </div>
@@ -284,11 +338,22 @@
                     }}
                   </span>
                   <span
-                    v-if="account.rateLimitStatus && account.rateLimitStatus.isRateLimited"
+                    v-if="
+                      (account.rateLimitStatus && account.rateLimitStatus.isRateLimited) ||
+                      account.rateLimitStatus === 'limited'
+                    "
                     class="inline-flex items-center rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-800"
                   >
                     <i class="fas fa-exclamation-triangle mr-1" />
-                    限流中 ({{ account.rateLimitStatus.minutesRemaining }}分钟)
+                    限流中
+                    <span
+                      v-if="
+                        account.rateLimitStatus &&
+                        typeof account.rateLimitStatus === 'object' &&
+                        account.rateLimitStatus.minutesRemaining > 0
+                      "
+                      >({{ account.rateLimitStatus.minutesRemaining }}分钟)</span
+                    >
                   </span>
                   <span
                     v-if="account.schedulable === false"
@@ -435,6 +500,7 @@
                       (account.status === 'unauthorized' ||
                         account.status !== 'active' ||
                         account.rateLimitStatus?.isRateLimited ||
+                        account.rateLimitStatus === 'limited' ||
                         !account.isActive)
                     "
                     :class="[
@@ -716,6 +782,7 @@ import { apiClient } from '@/config/api'
 import { useConfirm } from '@/composables/useConfirm'
 import AccountForm from '@/components/accounts/AccountForm.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import CustomDropdown from '@/components/common/CustomDropdown.vue'
 
 // 使用确认弹窗
 const { showConfirmModal, confirmOptions, showConfirm, handleConfirm, handleCancel } = useConfirm()
@@ -730,7 +797,45 @@ const apiKeys = ref([])
 const refreshingTokens = ref({})
 const accountGroups = ref([])
 const groupFilter = ref('all')
-const filteredAccounts = ref([])
+const platformFilter = ref('all')
+
+// 缓存状态标志
+const apiKeysLoaded = ref(false)
+const groupsLoaded = ref(false)
+const groupMembersLoaded = ref(false)
+const accountGroupMap = ref(new Map())
+
+// 下拉选项数据
+const sortOptions = ref([
+  { value: 'name', label: '按名称排序', icon: 'fa-font' },
+  { value: 'dailyTokens', label: '按今日Token排序', icon: 'fa-coins' },
+  { value: 'dailyRequests', label: '按今日请求数排序', icon: 'fa-chart-line' },
+  { value: 'totalTokens', label: '按总Token排序', icon: 'fa-database' },
+  { value: 'lastUsed', label: '按最后使用排序', icon: 'fa-clock' }
+])
+
+const platformOptions = ref([
+  { value: 'all', label: '所有平台', icon: 'fa-globe' },
+  { value: 'claude', label: 'Claude', icon: 'fa-brain' },
+  { value: 'claude-console', label: 'Claude Console', icon: 'fa-terminal' },
+  { value: 'gemini', label: 'Gemini', icon: 'fa-robot' },
+  { value: 'bedrock', label: 'Bedrock', icon: 'fab fa-aws' }
+])
+
+const groupOptions = computed(() => {
+  const options = [
+    { value: 'all', label: '所有账户', icon: 'fa-globe' },
+    { value: 'ungrouped', label: '未分组账户', icon: 'fa-user' }
+  ]
+  accountGroups.value.forEach((group) => {
+    options.push({
+      value: group.id,
+      label: `${group.name} (${group.platform === 'claude' ? 'Claude' : 'Gemini'})`,
+      icon: group.platform === 'claude' ? 'fa-brain' : 'fa-robot'
+    })
+  })
+  return options
+})
 
 // 模态框状态
 const showCreateAccountModal = ref(false)
@@ -739,7 +844,7 @@ const editingAccount = ref(null)
 
 // 计算排序后的账户列表
 const sortedAccounts = computed(() => {
-  const sourceAccounts = filteredAccounts.value.length > 0 ? filteredAccounts.value : accounts.value
+  const sourceAccounts = accounts.value
   if (!accountsSortBy.value) return sourceAccounts
 
   const sorted = [...sourceAccounts].sort((a, b) => {
@@ -779,48 +884,74 @@ const sortedAccounts = computed(() => {
 })
 
 // 加载账户列表
-const loadAccounts = async () => {
+const loadAccounts = async (forceReload = false) => {
   accountsLoading.value = true
   try {
-    const [claudeData, claudeConsoleData, bedrockData, geminiData, apiKeysData, groupsData] =
-      await Promise.all([
-        apiClient.get('/admin/claude-accounts'),
-        apiClient.get('/admin/claude-console-accounts'),
-        apiClient.get('/admin/bedrock-accounts'),
-        apiClient.get('/admin/gemini-accounts'),
-        apiClient.get('/admin/api-keys'),
-        apiClient.get('/admin/account-groups')
-      ])
-
-    // 更新API Keys列表
-    if (apiKeysData.success) {
-      apiKeys.value = apiKeysData.data || []
+    // 构建查询参数
+    const params = {}
+    if (platformFilter.value !== 'all') {
+      params.platform = platformFilter.value
+    }
+    if (groupFilter.value !== 'all') {
+      params.groupId = groupFilter.value
     }
 
-    // 更新分组列表
-    if (groupsData.success) {
-      accountGroups.value = groupsData.data || []
-    }
+    // 根据平台筛选决定需要请求哪些接口
+    const requests = []
 
-    // 创建分组ID到分组信息的映射
-    const groupMap = new Map()
-    const accountGroupMap = new Map()
-
-    // 获取所有分组的成员信息
-    for (const group of accountGroups.value) {
-      groupMap.set(group.id, group)
-      try {
-        const membersResponse = await apiClient.get(`/admin/account-groups/${group.id}/members`)
-        if (membersResponse.success) {
-          const members = membersResponse.data || []
-          members.forEach((member) => {
-            accountGroupMap.set(member.id, group)
-          })
-        }
-      } catch (error) {
-        console.error(`Failed to load members for group ${group.id}:`, error)
+    if (platformFilter.value === 'all') {
+      // 请求所有平台
+      requests.push(
+        apiClient.get('/admin/claude-accounts', { params }),
+        apiClient.get('/admin/claude-console-accounts', { params }),
+        apiClient.get('/admin/bedrock-accounts', { params }),
+        apiClient.get('/admin/gemini-accounts', { params })
+      )
+    } else {
+      // 只请求指定平台，其他平台设为null占位
+      switch (platformFilter.value) {
+        case 'claude':
+          requests.push(
+            apiClient.get('/admin/claude-accounts', { params }),
+            Promise.resolve({ success: true, data: [] }), // claude-console 占位
+            Promise.resolve({ success: true, data: [] }), // bedrock 占位
+            Promise.resolve({ success: true, data: [] }) // gemini 占位
+          )
+          break
+        case 'claude-console':
+          requests.push(
+            Promise.resolve({ success: true, data: [] }), // claude 占位
+            apiClient.get('/admin/claude-console-accounts', { params }),
+            Promise.resolve({ success: true, data: [] }), // bedrock 占位
+            Promise.resolve({ success: true, data: [] }) // gemini 占位
+          )
+          break
+        case 'bedrock':
+          requests.push(
+            Promise.resolve({ success: true, data: [] }), // claude 占位
+            Promise.resolve({ success: true, data: [] }), // claude-console 占位
+            apiClient.get('/admin/bedrock-accounts', { params }),
+            Promise.resolve({ success: true, data: [] }) // gemini 占位
+          )
+          break
+        case 'gemini':
+          requests.push(
+            Promise.resolve({ success: true, data: [] }), // claude 占位
+            Promise.resolve({ success: true, data: [] }), // claude-console 占位
+            Promise.resolve({ success: true, data: [] }), // bedrock 占位
+            apiClient.get('/admin/gemini-accounts', { params })
+          )
+          break
       }
     }
+
+    // 使用缓存机制加载 API Keys 和分组数据
+    await Promise.all([loadApiKeys(forceReload), loadAccountGroups(forceReload)])
+
+    // 加载分组成员关系（需要在分组数据加载完成后）
+    await loadGroupMembers(forceReload)
+
+    const [claudeData, claudeConsoleData, bedrockData, geminiData] = await Promise.all(requests)
 
     const allAccounts = []
 
@@ -831,7 +962,7 @@ const loadAccounts = async () => {
           (key) => key.claudeAccountId === acc.id
         ).length
         // 检查是否属于某个分组
-        const groupInfo = accountGroupMap.get(acc.id) || null
+        const groupInfo = accountGroupMap.value.get(acc.id) || null
         return { ...acc, platform: 'claude', boundApiKeysCount, groupInfo }
       })
       allAccounts.push(...claudeAccounts)
@@ -840,7 +971,7 @@ const loadAccounts = async () => {
     if (claudeConsoleData.success) {
       const claudeConsoleAccounts = (claudeConsoleData.data || []).map((acc) => {
         // Claude Console账户暂时不支持直接绑定
-        const groupInfo = accountGroupMap.get(acc.id) || null
+        const groupInfo = accountGroupMap.value.get(acc.id) || null
         return { ...acc, platform: 'claude-console', boundApiKeysCount: 0, groupInfo }
       })
       allAccounts.push(...claudeConsoleAccounts)
@@ -849,7 +980,7 @@ const loadAccounts = async () => {
     if (bedrockData.success) {
       const bedrockAccounts = (bedrockData.data || []).map((acc) => {
         // Bedrock账户暂时不支持直接绑定
-        const groupInfo = accountGroupMap.get(acc.id) || null
+        const groupInfo = accountGroupMap.value.get(acc.id) || null
         return { ...acc, platform: 'bedrock', boundApiKeysCount: 0, groupInfo }
       })
       allAccounts.push(...bedrockAccounts)
@@ -861,15 +992,13 @@ const loadAccounts = async () => {
         const boundApiKeysCount = apiKeys.value.filter(
           (key) => key.geminiAccountId === acc.id
         ).length
-        const groupInfo = accountGroupMap.get(acc.id) || null
+        const groupInfo = accountGroupMap.value.get(acc.id) || null
         return { ...acc, platform: 'gemini', boundApiKeysCount, groupInfo }
       })
       allAccounts.push(...geminiAccounts)
     }
 
     accounts.value = allAccounts
-    // 初始化过滤后的账户列表
-    filterByGroup()
   } catch (error) {
     showToast('加载账户失败', 'error')
   } finally {
@@ -915,30 +1044,86 @@ const formatLastUsed = (dateString) => {
   return date.toLocaleDateString('zh-CN')
 }
 
-// 加载API Keys列表
-const loadApiKeys = async () => {
+// 加载API Keys列表（缓存版本）
+const loadApiKeys = async (forceReload = false) => {
+  if (!forceReload && apiKeysLoaded.value) {
+    return // 使用缓存数据
+  }
+
   try {
     const response = await apiClient.get('/admin/api-keys')
     if (response.success) {
-      apiKeys.value = response.data
+      apiKeys.value = response.data || []
+      apiKeysLoaded.value = true
     }
   } catch (error) {
     console.error('Failed to load API keys:', error)
   }
 }
 
+// 加载账户分组列表（缓存版本）
+const loadAccountGroups = async (forceReload = false) => {
+  if (!forceReload && groupsLoaded.value) {
+    return // 使用缓存数据
+  }
+
+  try {
+    const response = await apiClient.get('/admin/account-groups')
+    if (response.success) {
+      accountGroups.value = response.data || []
+      groupsLoaded.value = true
+    }
+  } catch (error) {
+    console.error('Failed to load account groups:', error)
+  }
+}
+
+// 加载分组成员关系（缓存版本）
+const loadGroupMembers = async (forceReload = false) => {
+  if (!forceReload && groupMembersLoaded.value) {
+    return // 使用缓存数据
+  }
+
+  try {
+    // 重置映射
+    accountGroupMap.value.clear()
+
+    // 获取所有分组的成员信息
+    for (const group of accountGroups.value) {
+      try {
+        const membersResponse = await apiClient.get(`/admin/account-groups/${group.id}/members`)
+        if (membersResponse.success) {
+          const members = membersResponse.data || []
+          members.forEach((member) => {
+            accountGroupMap.value.set(member.id, group)
+          })
+        }
+      } catch (error) {
+        console.error(`Failed to load members for group ${group.id}:`, error)
+      }
+    }
+    groupMembersLoaded.value = true
+  } catch (error) {
+    console.error('Failed to load group members:', error)
+  }
+}
+
+// 清空缓存的函数
+const clearCache = () => {
+  apiKeysLoaded.value = false
+  groupsLoaded.value = false
+  groupMembersLoaded.value = false
+  accountGroupMap.value.clear()
+}
+
+// 按平台筛选账户
+const filterByPlatform = () => {
+  loadAccounts()
+}
+
 // 按分组筛选账户
 const filterByGroup = () => {
-  if (groupFilter.value === 'all') {
-    filteredAccounts.value = accounts.value
-  } else if (groupFilter.value === 'ungrouped') {
-    filteredAccounts.value = accounts.value.filter((acc) => !acc.groupInfo)
-  } else {
-    // 按特定分组筛选
-    filteredAccounts.value = accounts.value.filter(
-      (acc) => acc.groupInfo && acc.groupInfo.id === groupFilter.value
-    )
-  }
+  loadAccounts()
 }
 
 // 格式化代理信息显示
@@ -1043,6 +1228,8 @@ const deleteAccount = async (account) => {
 
     if (data.success) {
       showToast('账户已删除', 'success')
+      // 清空分组成员缓存，因为账户可能从分组中移除
+      groupMembersLoaded.value = false
       loadAccounts()
     } else {
       showToast(data.message || '删除失败', 'error')
@@ -1148,6 +1335,8 @@ const toggleSchedulable = async (account) => {
 const handleCreateSuccess = () => {
   showCreateAccountModal.value = false
   showToast('账户创建成功', 'success')
+  // 清空缓存，因为可能涉及分组关系变化
+  clearCache()
   loadAccounts()
 }
 
@@ -1155,6 +1344,8 @@ const handleCreateSuccess = () => {
 const handleEditSuccess = () => {
   showEditAccountModal.value = false
   showToast('账户更新成功', 'success')
+  // 清空分组成员缓存，因为账户类型和分组可能发生变化
+  groupMembersLoaded.value = false
   loadAccounts()
 }
 
@@ -1168,7 +1359,8 @@ const getAccountStatusText = (account) => {
   if (
     account.isRateLimited ||
     account.status === 'rate_limited' ||
-    (account.rateLimitStatus && account.rateLimitStatus.isRateLimited)
+    (account.rateLimitStatus && account.rateLimitStatus.isRateLimited) ||
+    account.rateLimitStatus === 'limited'
   )
     return '限流中'
   // 检查是否错误
@@ -1190,7 +1382,8 @@ const getAccountStatusClass = (account) => {
   if (
     account.isRateLimited ||
     account.status === 'rate_limited' ||
-    (account.rateLimitStatus && account.rateLimitStatus.isRateLimited)
+    (account.rateLimitStatus && account.rateLimitStatus.isRateLimited) ||
+    account.rateLimitStatus === 'limited'
   ) {
     return 'bg-orange-100 text-orange-800'
   }
@@ -1214,7 +1407,8 @@ const getAccountStatusDotClass = (account) => {
   if (
     account.isRateLimited ||
     account.status === 'rate_limited' ||
-    (account.rateLimitStatus && account.rateLimitStatus.isRateLimited)
+    (account.rateLimitStatus && account.rateLimitStatus.isRateLimited) ||
+    account.rateLimitStatus === 'limited'
   ) {
     return 'bg-orange-500'
   }
@@ -1282,8 +1476,8 @@ watch(accountSortBy, (newVal) => {
 })
 
 onMounted(() => {
-  loadAccounts()
-  loadApiKeys()
+  // 首次加载时强制刷新所有数据
+  loadAccounts(true)
 })
 </script>
 

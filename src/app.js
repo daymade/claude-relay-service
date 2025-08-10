@@ -280,13 +280,13 @@ class Application {
           const health = {
             status: 'healthy',
             service: 'claude-relay-service',
-            version: version,
+            version,
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
             memory: {
-              used: Math.round(memory.heapUsed / 1024 / 1024) + 'MB',
-              total: Math.round(memory.heapTotal / 1024 / 1024) + 'MB',
-              external: Math.round(memory.external / 1024 / 1024) + 'MB'
+              used: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
+              total: `${Math.round(memory.heapTotal / 1024 / 1024)}MB`,
+              external: `${Math.round(memory.external / 1024 / 1024)}MB`
             },
             components: {
               redis: redisHealth,

@@ -620,6 +620,7 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       concurrencyLimit,
       rateLimitWindow,
       rateLimitRequests,
+      isActive,
       claudeAccountId,
       claudeConsoleAccountId,
       geminiAccountId,
@@ -726,6 +727,7 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       if (expiresAt === null) {
         // null 表示永不过期
         updates.expiresAt = null
+        updates.isActive = true
       } else {
         // 验证日期格式
         const expireDate = new Date(expiresAt)
@@ -733,6 +735,7 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
           return res.status(400).json({ error: 'Invalid expiration date format' })
         }
         updates.expiresAt = expiresAt
+        updates.isActive = expireDate > new Date() // 如果过期时间在当前时间之后，则设置为激活状态
       }
     }
 
@@ -754,6 +757,14 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
         return res.status(400).json({ error: 'All tags must be non-empty strings' })
       }
       updates.tags = tags
+    }
+
+    // 处理活跃/禁用状态状态, 放在过期处理后，以确保后续增加禁用key功能
+    if (isActive !== undefined) {
+      if (typeof isActive !== 'boolean') {
+        return res.status(400).json({ error: 'isActive must be a boolean' })
+      }
+      updates.isActive = isActive
     }
 
     await apiKeyService.updateApiKey(keyId, updates)
@@ -1135,7 +1146,27 @@ router.post('/claude-accounts/exchange-setup-token-code', authenticateAdmin, asy
 // 获取所有Claude账户
 router.get('/claude-accounts', authenticateAdmin, async (req, res) => {
   try {
-    const accounts = await claudeAccountService.getAllAccounts()
+    const { platform, groupId } = req.query
+    let accounts = await claudeAccountService.getAllAccounts()
+
+    // 根据查询参数进行筛选
+    if (platform && platform !== 'all' && platform !== 'claude') {
+      // 如果指定了其他平台，返回空数组
+      accounts = []
+    }
+
+    // 如果指定了分组筛选
+    if (groupId && groupId !== 'all') {
+      if (groupId === 'ungrouped') {
+        // 筛选未分组账户
+        accounts = accounts.filter((account) => !account.groupInfo)
+      } else {
+        // 筛选特定分组的账户
+        accounts = accounts.filter(
+          (account) => account.groupInfo && account.groupInfo.id === groupId
+        )
+      }
+    }
 
     // 为每个账户添加使用统计信息
     const accountsWithStats = await Promise.all(
@@ -1417,7 +1448,27 @@ router.put(
 // 获取所有Claude Console账户
 router.get('/claude-console-accounts', authenticateAdmin, async (req, res) => {
   try {
-    const accounts = await claudeConsoleAccountService.getAllAccounts()
+    const { platform, groupId } = req.query
+    let accounts = await claudeConsoleAccountService.getAllAccounts()
+
+    // 根据查询参数进行筛选
+    if (platform && platform !== 'all' && platform !== 'claude-console') {
+      // 如果指定了其他平台，返回空数组
+      accounts = []
+    }
+
+    // 如果指定了分组筛选
+    if (groupId && groupId !== 'all') {
+      if (groupId === 'ungrouped') {
+        // 筛选未分组账户
+        accounts = accounts.filter((account) => !account.groupInfo)
+      } else {
+        // 筛选特定分组的账户
+        accounts = accounts.filter(
+          (account) => account.groupInfo && account.groupInfo.id === groupId
+        )
+      }
+    }
 
     // 为每个账户添加使用统计信息
     const accountsWithStats = await Promise.all(
@@ -1666,6 +1717,7 @@ router.put(
 // 获取所有Bedrock账户
 router.get('/bedrock-accounts', authenticateAdmin, async (req, res) => {
   try {
+    const { platform, groupId } = req.query
     const result = await bedrockAccountService.getAllAccounts()
     if (!result.success) {
       return res
@@ -1673,9 +1725,30 @@ router.get('/bedrock-accounts', authenticateAdmin, async (req, res) => {
         .json({ error: 'Failed to get Bedrock accounts', message: result.error })
     }
 
+    let accounts = result.data
+
+    // 根据查询参数进行筛选
+    if (platform && platform !== 'all' && platform !== 'bedrock') {
+      // 如果指定了其他平台，返回空数组
+      accounts = []
+    }
+
+    // 如果指定了分组筛选
+    if (groupId && groupId !== 'all') {
+      if (groupId === 'ungrouped') {
+        // 筛选未分组账户
+        accounts = accounts.filter((account) => !account.groupInfo)
+      } else {
+        // 筛选特定分组的账户
+        accounts = accounts.filter(
+          (account) => account.groupInfo && account.groupInfo.id === groupId
+        )
+      }
+    }
+
     // 为每个账户添加使用统计信息
     const accountsWithStats = await Promise.all(
-      result.data.map(async (account) => {
+      accounts.map(async (account) => {
         try {
           const usageStats = await redis.getAccountUsageStats(account.id)
           return {
@@ -2041,7 +2114,27 @@ router.post('/gemini-accounts/exchange-code', authenticateAdmin, async (req, res
 // 获取所有 Gemini 账户
 router.get('/gemini-accounts', authenticateAdmin, async (req, res) => {
   try {
-    const accounts = await geminiAccountService.getAllAccounts()
+    const { platform, groupId } = req.query
+    let accounts = await geminiAccountService.getAllAccounts()
+
+    // 根据查询参数进行筛选
+    if (platform && platform !== 'all' && platform !== 'gemini') {
+      // 如果指定了其他平台，返回空数组
+      accounts = []
+    }
+
+    // 如果指定了分组筛选
+    if (groupId && groupId !== 'all') {
+      if (groupId === 'ungrouped') {
+        // 筛选未分组账户
+        accounts = accounts.filter((account) => !account.groupInfo)
+      } else {
+        // 筛选特定分组的账户
+        accounts = accounts.filter(
+          (account) => account.groupInfo && account.groupInfo.id === groupId
+        )
+      }
+    }
 
     // 为每个账户添加使用统计信息（与Claude账户相同的逻辑）
     const accountsWithStats = await Promise.all(
@@ -2325,6 +2418,7 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
       claudeAccounts,
       claudeConsoleAccounts,
       geminiAccounts,
+      bedrockAccountsResult,
       todayStats,
       systemAverages,
       realtimeMetrics
@@ -2334,10 +2428,14 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
       claudeAccountService.getAllAccounts(),
       claudeConsoleAccountService.getAllAccounts(),
       geminiAccountService.getAllAccounts(),
+      bedrockAccountService.getAllAccounts(),
       redis.getTodayStats(),
       redis.getSystemAverages(),
       redis.getRealtimeSystemMetrics()
     ])
+
+    // 处理Bedrock账户数据
+    const bedrockAccounts = bedrockAccountsResult.success ? bedrockAccountsResult.data : []
 
     // 计算使用统计（统一使用allTokens）
     const totalTokensUsed = apiKeys.reduce(
@@ -2370,34 +2468,176 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
     )
 
     const activeApiKeys = apiKeys.filter((key) => key.isActive).length
-    const activeClaudeAccounts = claudeAccounts.filter(
-      (acc) => acc.isActive && acc.status === 'active'
+
+    // Claude账户统计 - 根据账户管理页面的判断逻辑
+    const normalClaudeAccounts = claudeAccounts.filter(
+      (acc) =>
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized' &&
+        acc.schedulable !== false &&
+        !(acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
+    ).length
+    const abnormalClaudeAccounts = claudeAccounts.filter(
+      (acc) => !acc.isActive || acc.status === 'blocked' || acc.status === 'unauthorized'
+    ).length
+    const pausedClaudeAccounts = claudeAccounts.filter(
+      (acc) =>
+        acc.schedulable === false &&
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized'
     ).length
     const rateLimitedClaudeAccounts = claudeAccounts.filter(
       (acc) => acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited
     ).length
-    const activeClaudeConsoleAccounts = claudeConsoleAccounts.filter(
-      (acc) => acc.isActive && acc.status === 'active'
+
+    // Claude Console账户统计
+    const normalClaudeConsoleAccounts = claudeConsoleAccounts.filter(
+      (acc) =>
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized' &&
+        acc.schedulable !== false &&
+        !(acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
+    ).length
+    const abnormalClaudeConsoleAccounts = claudeConsoleAccounts.filter(
+      (acc) => !acc.isActive || acc.status === 'blocked' || acc.status === 'unauthorized'
+    ).length
+    const pausedClaudeConsoleAccounts = claudeConsoleAccounts.filter(
+      (acc) =>
+        acc.schedulable === false &&
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized'
     ).length
     const rateLimitedClaudeConsoleAccounts = claudeConsoleAccounts.filter(
       (acc) => acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited
     ).length
-    const activeGeminiAccounts = geminiAccounts.filter(
-      (acc) => acc.isActive && acc.status === 'active'
+
+    // Gemini账户统计
+    const normalGeminiAccounts = geminiAccounts.filter(
+      (acc) =>
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized' &&
+        acc.schedulable !== false &&
+        !(
+          acc.rateLimitStatus === 'limited' ||
+          (acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
+        )
+    ).length
+    const abnormalGeminiAccounts = geminiAccounts.filter(
+      (acc) => !acc.isActive || acc.status === 'blocked' || acc.status === 'unauthorized'
+    ).length
+    const pausedGeminiAccounts = geminiAccounts.filter(
+      (acc) =>
+        acc.schedulable === false &&
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized'
     ).length
     const rateLimitedGeminiAccounts = geminiAccounts.filter(
-      (acc) => acc.rateLimitStatus === 'limited'
+      (acc) =>
+        acc.rateLimitStatus === 'limited' ||
+        (acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
+    ).length
+
+    // Bedrock账户统计
+    const normalBedrockAccounts = bedrockAccounts.filter(
+      (acc) =>
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized' &&
+        acc.schedulable !== false &&
+        !(acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited)
+    ).length
+    const abnormalBedrockAccounts = bedrockAccounts.filter(
+      (acc) => !acc.isActive || acc.status === 'blocked' || acc.status === 'unauthorized'
+    ).length
+    const pausedBedrockAccounts = bedrockAccounts.filter(
+      (acc) =>
+        acc.schedulable === false &&
+        acc.isActive &&
+        acc.status !== 'blocked' &&
+        acc.status !== 'unauthorized'
+    ).length
+    const rateLimitedBedrockAccounts = bedrockAccounts.filter(
+      (acc) => acc.rateLimitStatus && acc.rateLimitStatus.isRateLimited
     ).length
 
     const dashboard = {
       overview: {
         totalApiKeys: apiKeys.length,
         activeApiKeys,
+        // 总账户统计（所有平台）
+        totalAccounts:
+          claudeAccounts.length +
+          claudeConsoleAccounts.length +
+          geminiAccounts.length +
+          bedrockAccounts.length,
+        normalAccounts:
+          normalClaudeAccounts +
+          normalClaudeConsoleAccounts +
+          normalGeminiAccounts +
+          normalBedrockAccounts,
+        abnormalAccounts:
+          abnormalClaudeAccounts +
+          abnormalClaudeConsoleAccounts +
+          abnormalGeminiAccounts +
+          abnormalBedrockAccounts,
+        pausedAccounts:
+          pausedClaudeAccounts +
+          pausedClaudeConsoleAccounts +
+          pausedGeminiAccounts +
+          pausedBedrockAccounts,
+        rateLimitedAccounts:
+          rateLimitedClaudeAccounts +
+          rateLimitedClaudeConsoleAccounts +
+          rateLimitedGeminiAccounts +
+          rateLimitedBedrockAccounts,
+        // 各平台详细统计
+        accountsByPlatform: {
+          claude: {
+            total: claudeAccounts.length,
+            normal: normalClaudeAccounts,
+            abnormal: abnormalClaudeAccounts,
+            paused: pausedClaudeAccounts,
+            rateLimited: rateLimitedClaudeAccounts
+          },
+          'claude-console': {
+            total: claudeConsoleAccounts.length,
+            normal: normalClaudeConsoleAccounts,
+            abnormal: abnormalClaudeConsoleAccounts,
+            paused: pausedClaudeConsoleAccounts,
+            rateLimited: rateLimitedClaudeConsoleAccounts
+          },
+          gemini: {
+            total: geminiAccounts.length,
+            normal: normalGeminiAccounts,
+            abnormal: abnormalGeminiAccounts,
+            paused: pausedGeminiAccounts,
+            rateLimited: rateLimitedGeminiAccounts
+          },
+          bedrock: {
+            total: bedrockAccounts.length,
+            normal: normalBedrockAccounts,
+            abnormal: abnormalBedrockAccounts,
+            paused: pausedBedrockAccounts,
+            rateLimited: rateLimitedBedrockAccounts
+          }
+        },
+        // 保留旧字段以兼容
+        activeAccounts:
+          normalClaudeAccounts +
+          normalClaudeConsoleAccounts +
+          normalGeminiAccounts +
+          normalBedrockAccounts,
         totalClaudeAccounts: claudeAccounts.length + claudeConsoleAccounts.length,
-        activeClaudeAccounts: activeClaudeAccounts + activeClaudeConsoleAccounts,
+        activeClaudeAccounts: normalClaudeAccounts + normalClaudeConsoleAccounts,
         rateLimitedClaudeAccounts: rateLimitedClaudeAccounts + rateLimitedClaudeConsoleAccounts,
         totalGeminiAccounts: geminiAccounts.length,
-        activeGeminiAccounts,
+        activeGeminiAccounts: normalGeminiAccounts,
         rateLimitedGeminiAccounts,
         totalTokensUsed,
         totalRequestsUsed,
@@ -2428,8 +2668,8 @@ router.get('/dashboard', authenticateAdmin, async (req, res) => {
       },
       systemHealth: {
         redisConnected: redis.isConnected,
-        claudeAccountsHealthy: activeClaudeAccounts + activeClaudeConsoleAccounts > 0,
-        geminiAccountsHealthy: activeGeminiAccounts > 0,
+        claudeAccountsHealthy: normalClaudeAccounts + normalClaudeConsoleAccounts > 0,
+        geminiAccountsHealthy: normalGeminiAccounts > 0,
         uptime: process.uptime()
       },
       systemTimezone: config.system.timezoneOffset || 8
