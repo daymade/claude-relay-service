@@ -18,7 +18,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const config = require('../../config/config')
-const { v4: uuidv4 } = require('uuid')
+const { v4: _uuidv4 } = require('uuid')
 
 const router = express.Router()
 
@@ -4636,7 +4636,7 @@ router.post('/openai-accounts', authenticateAdmin, async (req, res) => {
       proxy,
       accountType,
       groupId,
-      dedicatedApiKeys,
+      dedicatedApiKeys: _dedicatedApiKeys,
       rateLimitDuration,
       priority
     } = req.body

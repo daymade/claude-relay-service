@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # 只测试 Claude Relay Service，使用本地 Redis
+  claude-relay:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # 服务器配置
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      
+      # 安全配置（测试用）
+      - JWT_SECRET=test-jwt-secret-change-this-in-production-123456
+      - ENCRYPTION_KEY=test-encryption-key-32-chars-now
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+      
+      # Redis 配置 - 使用宿主机的 Redis
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=6379
+      
+      # Claude API 配置
+      - CLAUDE_API_URL=https://api.anthropic.com/v1/messages
+      - CLAUDE_API_VERSION=2023-06-01
+      
+      # 代理配置 - 使用我们修改的 10 分钟超时
+      - DEFAULT_PROXY_TIMEOUT=600000
+      
+      # 日志配置
+      - LOG_LEVEL=info
+      
+      # 其他配置
+      - ENABLE_CORS=true
+      - TRUST_PROXY=true
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

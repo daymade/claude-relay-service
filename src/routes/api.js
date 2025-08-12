@@ -395,7 +395,13 @@ async function handleMessagesRequest(req, res) {
             cacheCreateTokens,
             cacheReadTokens,
             model,
-            responseAccountId
+            responseAccountId,
+            {
+              userId: req.apiKey.userId,
+              requestId: jsonData.id || null,
+              endpoint: req.originalUrl || '/v1/messages',
+              statusCode: res.statusCode || 200
+            }
           )
 
           // 更新时间窗口内的token计数

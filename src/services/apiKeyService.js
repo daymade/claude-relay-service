@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid')
 const config = require('../../config/config')
 const redis = require('../models/redis')
 const logger = require('../utils/logger')
+const databaseService = require('./databaseService')
 
 class ApiKeyService {
   constructor() {
@@ -100,6 +101,53 @@ class ApiKeyService {
   // 🔍 验证API Key
   async validateApiKey(apiKey) {
     try {
+      // First check if it's a claude4dev API key (sk_ prefix)
+      if (apiKey && apiKey.startsWith('sk_')) {
+        // Try to validate against database first
+        const dbKeyData = await databaseService.validateApiKey(apiKey)
+
+        if (dbKeyData) {
+          logger.api(`🔓 Database API key validated: ${dbKeyData.id}`)
+
+          // Convert database format to relay service format
+          return {
+            valid: true,
+            keyData: {
+              id: dbKeyData.id,
+              name: dbKeyData.name,
+              userId: dbKeyData.userId,
+              userEmail: dbKeyData.userEmail,
+              userName: dbKeyData.userName,
+              createdAt: dbKeyData.createdAt,
+              lastUsedAt: dbKeyData.lastUsed,
+              claudeAccountId: '', // Will be set by account scheduler
+              claudeConsoleAccountId: '',
+              geminiAccountId: '',
+              openaiAccountId: '',
+              permissions: 'all',
+              tokenLimit: dbKeyData.limits.maxTokensPerMinute,
+              concurrencyLimit: dbKeyData.limits.maxConcurrentRequests,
+              rateLimitWindow: 1, // 1 minute window
+              rateLimitRequests: dbKeyData.limits.maxRequestsPerMinute,
+              enableModelRestriction: false,
+              restrictedModels: [],
+              enableClientRestriction: false,
+              allowedClients: [],
+              dailyCostLimit: dbKeyData.limits.dailyCostLimit,
+              dailyCost: 0,
+              tags: ['claude4dev'],
+              usage: {
+                dailyTokens: 0,
+                monthlyTokens: 0,
+                totalTokens: 0
+              },
+              credits: dbKeyData.credits
+            }
+          }
+        }
+      }
+
+      // Check relay service format (cr_ prefix)
       if (!apiKey || !apiKey.startsWith(this.prefix)) {
         return { valid: false, error: 'Invalid API key format' }
       }
@@ -369,7 +417,8 @@ class ApiKeyService {
     cacheCreateTokens = 0,
     cacheReadTokens = 0,
     model = 'unknown',
-    accountId = null
+    accountId = null,
+    additionalData = {}
   ) {
     try {
       const totalTokens = inputTokens + outputTokens + cacheCreateTokens + cacheReadTokens
@@ -386,6 +435,32 @@ class ApiKeyService {
         model
       )
 
+      // Check if it's a database key (claude4dev key)
+      if (keyId && keyId.startsWith('db_')) {
+        // Extract the actual database token ID and user ID
+        const dbTokenId = keyId.replace('db_', '')
+
+        // Record to database for claude4dev keys
+        await databaseService.recordUsage({
+          userId: additionalData.userId,
+          tokenId: parseInt(dbTokenId),
+          model,
+          inputTokens,
+          outputTokens,
+          cacheCreationTokens: cacheCreateTokens,
+          cacheReadTokens,
+          cost: costInfo.costs.total,
+          requestId: additionalData.requestId,
+          endpoint: additionalData.endpoint || '/v1/messages',
+          statusCode: additionalData.statusCode || 200
+        })
+
+        logger.database(
+          `📊 Recorded database usage for user ${additionalData.userId}: ${totalTokens} tokens, $${costInfo.costs.total.toFixed(6)}`
+        )
+      }
+
+      // Also record to Redis for caching and quick access
       // 记录API Key级别的使用统计
       await redis.incrementTokenUsage(
         keyId,

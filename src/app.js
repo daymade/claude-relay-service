@@ -10,6 +10,7 @@ const config = require('../config/config')
 const logger = require('./utils/logger')
 const redis = require('./models/redis')
 const pricingService = require('./services/pricingService')
+const databaseService = require('./services/databaseService')
 
 // Import routes
 const apiRoutes = require('./routes/api')
@@ -20,6 +21,7 @@ const geminiRoutes = require('./routes/geminiRoutes')
 const openaiGeminiRoutes = require('./routes/openaiGeminiRoutes')
 const openaiClaudeRoutes = require('./routes/openaiClaudeRoutes')
 const openaiRoutes = require('./routes/openaiRoutes')
+const monitoringRoutes = require('./routes/monitoring')
 
 // Import middleware
 const {
@@ -43,6 +45,21 @@ class Application {
       logger.info('🔄 Connecting to Redis...')
       await redis.connect()
       logger.success('✅ Redis connected successfully')
+
+      // 📊 Initialize database connection for claude4dev integration
+      logger.info('🔄 Initializing database connection...')
+      const dbInitialized = databaseService.initialize()
+      if (dbInitialized) {
+        logger.success('✅ Database connected successfully')
+      } else {
+        logger.warn('⚠️ Database not available, using Redis-only mode')
+      }
+
+      // 📊 Start monitoring service
+      logger.info('🔄 Starting monitoring service...')
+      const monitoringService = require('./services/monitoringService')
+      await monitoringService.start()
+      logger.success('✅ Monitoring service started')
 
       // 💰 初始化价格服务
       logger.info('🔄 Initializing pricing service...')
@@ -226,6 +243,9 @@ class Application {
       }
 
       // 🛣️ 路由
+      // Monitoring routes (no auth required for health checks)
+      this.app.use('/', monitoringRoutes)
+      
       this.app.use('/api', apiRoutes)
       this.app.use('/claude', apiRoutes) // /claude 路由别名，与 /api 功能相同
       this.app.use('/admin', adminRoutes)
