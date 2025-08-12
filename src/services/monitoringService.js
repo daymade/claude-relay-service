@@ -380,24 +380,10 @@ class MonitoringService {
    * Clean up old database sessions
    */
   async cleanupDatabaseSessions() {
-    if (!databaseService.db) {
-      return
-    }
-
-    try {
-      const stmt = databaseService.db.prepare(`
-        DELETE FROM sessions 
-        WHERE datetime(last_accessed) < datetime('now', '-7 days')
-      `)
-
-      const result = stmt.run()
-
-      if (result.changes > 0) {
-        logger.debug(`Cleaned up ${result.changes} old sessions`)
-      }
-    } catch (error) {
-      logger.error('Database cleanup error:', error)
-    }
+    // Skip database cleanup since we're in readonly mode
+    // This prevents the "attempt to write a readonly database" error
+    // Database cleanup should be handled by the main claude4dev service
+    return
   }
 
   /**
