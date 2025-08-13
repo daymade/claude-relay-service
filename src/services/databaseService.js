@@ -40,7 +40,7 @@ class DatabaseService {
 
     try {
       this.db = new Database(this.dbPath, {
-        readonly: true, // Only read access needed
+        readonly: false, // Need write access for usage tracking
         fileMustExist: true
       })
 

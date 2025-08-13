@@ -20,9 +20,10 @@ class MonitoringService {
       }
     }
 
-    // Memory thresholds
-    this.memoryThreshold = 0.8 // 80% of available memory
-    this.heapThreshold = 0.85 // 85% of heap
+    // Memory thresholds - adjusted for development environment
+    // In production, consider using 0.8 and 0.85 respectively
+    this.memoryThreshold = process.env.NODE_ENV === 'production' ? 0.8 : 0.95 // 95% for dev, 80% for prod
+    this.heapThreshold = process.env.NODE_ENV === 'production' ? 0.85 : 0.95 // 95% for dev, 85% for prod
 
     // Performance metrics
     this.metrics = {
