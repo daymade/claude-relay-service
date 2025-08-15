@@ -1,5 +1,5 @@
 # 🎯 前端构建阶段
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 # 📁 设置工作目录
 WORKDIR /app/web/admin-spa
@@ -17,7 +17,7 @@ COPY web/admin-spa/ ./
 RUN npm run build || true
 
 # 🐳 主应用阶段
-FROM node:18-alpine
+FROM node:20-alpine
 
 # 📋 设置标签
 LABEL maintainer="claude-relay-service@example.com"
@@ -29,6 +29,9 @@ RUN apk add --no-cache \
     curl \
     dumb-init \
     sed \
+    python3 \
+    make \
+    g++ \
     && rm -rf /var/cache/apk/*
 
 # 📁 设置工作目录

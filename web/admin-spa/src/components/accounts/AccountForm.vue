@@ -1517,7 +1517,8 @@ const initProxyConfig = () => {
 // 表单数据
 const form = ref({
   platform: props.account?.platform || 'claude',
-  addType: props.account?.addType || (props.account?.platform === 'gemini' ? 'oauth' : 'setup-token'),
+  addType:
+    props.account?.addType || (props.account?.platform === 'gemini' ? 'oauth' : 'setup-token'),
   name: props.account?.name || '',
   description: props.account?.description || '',
   accountType: props.account?.accountType || 'shared',
