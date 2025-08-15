@@ -291,7 +291,8 @@ async function createAccount(accountData) {
     accessToken: accessToken ? encrypt(accessToken) : '',
     refreshToken: refreshToken ? encrypt(refreshToken) : '',
     expiresAt,
-    scopes: accountData.scopes || OAUTH_SCOPES.join(' '),
+    // 只有OAuth方式才有scopes，手动添加的没有
+    scopes: accountData.geminiOauth ? accountData.scopes || OAUTH_SCOPES.join(' ') : '',
 
     // 代理设置
     proxy: accountData.proxy ? JSON.stringify(accountData.proxy) : '',
@@ -455,6 +456,23 @@ async function updateAccount(accountId, updates) {
     }
   }
 
+  // 检查是否手动禁用了账号，如果是则发送webhook通知
+  if (updates.isActive === 'false' && existingAccount.isActive !== 'false') {
+    try {
+      const webhookNotifier = require('../utils/webhookNotifier')
+      await webhookNotifier.sendAccountAnomalyNotification({
+        accountId,
+        accountName: updates.name || existingAccount.name || 'Unknown Account',
+        platform: 'gemini',
+        status: 'disabled',
+        errorCode: 'GEMINI_MANUALLY_DISABLED',
+        reason: 'Account manually disabled by administrator'
+      })
+    } catch (webhookError) {
+      logger.error('Failed to send webhook notification for manual account disable:', webhookError)
+    }
+  }
+
   await client.hset(`${GEMINI_ACCOUNT_KEY_PREFIX}${accountId}`, updates)
 
   logger.info(`Updated Gemini account: ${accountId}`)
@@ -534,6 +552,12 @@ async function getAllAccounts() {
         geminiOauth: accountData.geminiOauth ? '[ENCRYPTED]' : '',
         accessToken: accountData.accessToken ? '[ENCRYPTED]' : '',
         refreshToken: accountData.refreshToken ? '[ENCRYPTED]' : '',
+        // 添加 scopes 字段用于判断认证方式
+        // 处理空字符串和默认值的情况
+        scopes:
+          accountData.scopes && accountData.scopes.trim() ? accountData.scopes.split(' ') : [],
+        // 添加 hasRefreshToken 标记
+        hasRefreshToken: !!accountData.refreshToken,
         // 添加限流状态信息（统一格式）
         rateLimitStatus: rateLimitInfo
           ? {
@@ -764,6 +788,21 @@ async function refreshAccountToken(accountId) {
           status: 'error',
           errorMessage: error.message
         })
+
+        // 发送Webhook通知
+        try {
+          const webhookNotifier = require('../utils/webhookNotifier')
+          await webhookNotifier.sendAccountAnomalyNotification({
+            accountId,
+            accountName: account.name,
+            platform: 'gemini',
+            status: 'error',
+            errorCode: 'GEMINI_ERROR',
+            reason: `Token refresh failed: ${error.message}`
+          })
+        } catch (webhookError) {
+          logger.error('Failed to send webhook notification:', webhookError)
+        }
       } catch (updateError) {
         logger.error('Failed to update account status after refresh error:', updateError)
       }
