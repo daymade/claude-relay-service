@@ -105,6 +105,10 @@
                   <input v-model="form.addType" class="mr-2" type="radio" value="manual" />
                   <span class="text-sm text-gray-700">手动输入 Access Token</span>
                 </label>
+                <label v-if="form.platform === 'claude'" class="flex cursor-pointer items-center">
+                  <input v-model="form.addType" class="mr-2" type="radio" value="third-party" />
+                  <span class="text-sm text-gray-700">第三方代理</span>
+                </label>
               </div>
             </div>
 
@@ -584,6 +588,59 @@
               </p>
             </div>
 
+            <!-- 第三方代理字段 -->
+            <div
+              v-if="form.platform === 'claude' && form.addType === 'third-party' && !isEdit"
+              class="space-y-4 rounded-lg border border-green-200 bg-green-50 p-4"
+            >
+              <div class="mb-4 flex items-start gap-3">
+                <div
+                  class="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-green-500"
+                >
+                  <i class="fas fa-globe text-sm text-white" />
+                </div>
+                <div>
+                  <h5 class="mb-2 font-semibold text-green-900">第三方代理配置</h5>
+                  <p class="text-sm text-green-800">
+                    配置第三方 Claude API 代理服务，如智谱AI等兼容 Claude API 的服务
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label class="mb-3 block text-sm font-semibold text-gray-700">代理 URL *</label>
+                <input
+                  v-model="form.baseUrl"
+                  class="form-input w-full"
+                  :class="{ 'border-red-500': errors.baseUrl }"
+                  placeholder="例如：https://open.bigmodel.cn/api/paas"
+                  required
+                  type="text"
+                />
+                <p v-if="errors.baseUrl" class="mt-1 text-xs text-red-500">
+                  {{ errors.baseUrl }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500">
+                  第三方服务的 API 基础 URL，不需要包含 /v1/messages 路径
+                </p>
+              </div>
+
+              <div>
+                <label class="mb-3 block text-sm font-semibold text-gray-700">API 密钥 *</label>
+                <input
+                  v-model="form.apiKey"
+                  class="form-input w-full"
+                  :class="{ 'border-red-500': errors.apiKey }"
+                  placeholder="请输入第三方服务的 API 密钥"
+                  required
+                  type="password"
+                />
+                <p v-if="errors.apiKey" class="mt-1 text-xs text-red-500">
+                  {{ errors.apiKey }}
+                </p>
+              </div>
+            </div>
+
             <!-- 所有平台的优先级设置 -->
             <div>
               <label class="mb-3 block text-sm font-semibold text-gray-700"
@@ -1011,6 +1068,47 @@
               <i class="fas fa-info-circle mr-1" />
               Pro 账号不支持 Claude Opus 4 模型
             </p>
+          </div>
+
+          <!-- 第三方代理编辑字段 -->
+          <div
+            v-if="isEdit && form.addType === 'third-party'"
+            class="space-y-4 rounded-lg border border-purple-200 bg-purple-50 p-4"
+          >
+            <div class="mb-4 flex items-start gap-3">
+              <div
+                class="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-purple-500"
+              >
+                <i class="fas fa-globe text-sm text-white" />
+              </div>
+              <div>
+                <h5 class="mb-2 font-semibold text-purple-900">第三方代理配置</h5>
+                <p class="text-sm text-purple-800">配置第三方 Claude API 代理服务的连接信息。</p>
+              </div>
+            </div>
+
+            <div>
+              <label class="mb-3 block text-sm font-semibold text-gray-700">代理 URL</label>
+              <input
+                v-model="form.baseUrl"
+                class="form-input w-full"
+                placeholder="例如：https://api.example.com"
+                type="text"
+              />
+              <p class="mt-1 text-xs text-gray-500">
+                第三方代理服务的基础 URL，不需要包含 /v1/messages 路径
+              </p>
+            </div>
+
+            <div>
+              <label class="mb-3 block text-sm font-semibold text-gray-700">API 密钥</label>
+              <input
+                v-model="form.apiKey"
+                class="form-input w-full"
+                placeholder="请输入第三方代理的 API 密钥"
+                type="password"
+              />
+            </div>
           </div>
 
           <!-- 所有平台的优先级设置（编辑模式） -->
@@ -1476,6 +1574,8 @@ const form = ref({
   apiUrl: props.account?.apiUrl || '',
   apiKey: props.account?.apiKey || '',
   priority: props.account?.priority || 50,
+  // 第三方代理字段
+  baseUrl: props.account?.baseUrl || '',
   supportedModels: (() => {
     const models = props.account?.supportedModels
     if (!models) return ''
@@ -1533,6 +1633,7 @@ const errors = ref({
   accessToken: '',
   apiUrl: '',
   apiKey: '',
+  baseUrl: '',
   accessKeyId: '',
   secretAccessKey: '',
   region: ''
@@ -1802,6 +1903,16 @@ const createAccount = async () => {
       errors.value.region = '请选择 AWS 区域'
       hasError = true
     }
+  } else if (form.value.addType === 'third-party') {
+    // 第三方代理验证
+    if (!form.value.baseUrl || form.value.baseUrl.trim() === '') {
+      errors.value.baseUrl = '请填写代理 URL'
+      hasError = true
+    }
+    if (!form.value.apiKey || form.value.apiKey.trim() === '') {
+      errors.value.apiKey = '请填写 API 密钥'
+      hasError = true
+    }
   } else if (form.value.addType === 'manual') {
     // 手动模式验证
     if (!form.value.accessToken || form.value.accessToken.trim() === '') {
@@ -1850,24 +1961,32 @@ const createAccount = async () => {
     }
 
     if (form.value.platform === 'claude') {
-      // Claude手动模式需要构建claudeAiOauth对象
-      const expiresInMs = form.value.refreshToken
-        ? 10 * 60 * 1000 // 10分钟
-        : 365 * 24 * 60 * 60 * 1000 // 1年
+      if (form.value.addType === 'third-party') {
+        // 第三方代理模式
+        data.addType = 'third-party'
+        data.baseUrl = form.value.baseUrl
+        data.apiKey = form.value.apiKey
+        data.priority = form.value.priority || 50
+      } else {
+        // Claude手动模式需要构建claudeAiOauth对象
+        const expiresInMs = form.value.refreshToken
+          ? 10 * 60 * 1000 // 10分钟
+          : 365 * 24 * 60 * 60 * 1000 // 1年
 
-      data.claudeAiOauth = {
-        accessToken: form.value.accessToken,
-        refreshToken: form.value.refreshToken || '',
-        expiresAt: Date.now() + expiresInMs,
-        scopes: [] // 手动添加没有 scopes
-      }
-      data.priority = form.value.priority || 50
-      // 添加订阅类型信息
-      data.subscriptionInfo = {
-        accountType: form.value.subscriptionType || 'claude_max',
-        hasClaudeMax: form.value.subscriptionType === 'claude_max',
-        hasClaudePro: form.value.subscriptionType === 'claude_pro',
-        manuallySet: true // 标记为手动设置
+        data.claudeAiOauth = {
+          accessToken: form.value.accessToken,
+          refreshToken: form.value.refreshToken || '',
+          expiresAt: Date.now() + expiresInMs,
+          scopes: [] // 手动添加没有 scopes
+        }
+        data.priority = form.value.priority || 50
+        // 添加订阅类型信息
+        data.subscriptionInfo = {
+          accountType: form.value.subscriptionType || 'claude_max',
+          hasClaudeMax: form.value.subscriptionType === 'claude_max',
+          hasClaudePro: form.value.subscriptionType === 'claude_pro',
+          manuallySet: true // 标记为手动设置
+        }
       }
     } else if (form.value.platform === 'gemini') {
       // Gemini手动模式需要构建geminiOauth对象
@@ -2088,12 +2207,20 @@ const updateAccount = async () => {
     // Claude 官方账号优先级和订阅类型更新
     if (props.account.platform === 'claude') {
       data.priority = form.value.priority || 50
-      // 更新订阅类型信息
-      data.subscriptionInfo = {
-        accountType: form.value.subscriptionType || 'claude_max',
-        hasClaudeMax: form.value.subscriptionType === 'claude_max',
-        hasClaudePro: form.value.subscriptionType === 'claude_pro',
-        manuallySet: true // 标记为手动设置
+      // 如果是第三方代理账户，更新相关字段
+      if (form.value.addType === 'third-party') {
+        data.baseUrl = form.value.baseUrl
+        if (form.value.apiKey) {
+          data.apiKey = form.value.apiKey
+        }
+      } else {
+        // 更新订阅类型信息
+        data.subscriptionInfo = {
+          accountType: form.value.subscriptionType || 'claude_max',
+          hasClaudeMax: form.value.subscriptionType === 'claude_max',
+          hasClaudePro: form.value.subscriptionType === 'claude_pro',
+          manuallySet: true // 标记为手动设置
+        }
       }
     }
 
@@ -2202,6 +2329,16 @@ watch(
   () => {
     if (errors.value.apiKey && form.value.apiKey?.trim()) {
       errors.value.apiKey = ''
+    }
+  }
+)
+
+// 监听Base URL变化，清除错误
+watch(
+  () => form.value.baseUrl,
+  () => {
+    if (errors.value.baseUrl && form.value.baseUrl?.trim()) {
+      errors.value.baseUrl = ''
     }
   }
 )
@@ -2430,8 +2567,10 @@ watch(
         proxy: proxyConfig,
         // Claude Console 特定字段
         apiUrl: newAccount.apiUrl || '',
-        apiKey: '', // 编辑模式不显示现有的 API Key
+        apiKey: newAccount.addType === 'third-party' ? newAccount.apiKey || '' : '', // 第三方代理时需要显示 API Key
         priority: newAccount.priority || 50,
+        // 第三方代理字段
+        baseUrl: newAccount.baseUrl || '',
         supportedModels: (() => {
           const models = newAccount.supportedModels
           if (!models) return ''
